@@ -18,6 +18,8 @@ export interface SectionCardProps {
   title?: ReactNode;
   description?: ReactNode;
   required?: boolean;
+  /** Rendered beside the title, e.g. a validation message. */
+  titleAside?: ReactNode;
   /** Small square icon tile rendered before the title. */
   icon?: ReactNode;
   /** Right-hand controls in the header strip. */
@@ -44,6 +46,7 @@ export const SectionCard = ({
   title,
   description,
   required = false,
+  titleAside,
   icon,
   actions,
   children,
@@ -103,6 +106,7 @@ export const SectionCard = ({
                     *
                   </Typography>
                 ) : null}
+                {titleAside ? <Box sx={{ ml: 1, minWidth: 0 }}>{titleAside}</Box> : null}
               </Box>
               {description ? (
                 <Typography type="s5" color={TEXT_SUBTLE}>

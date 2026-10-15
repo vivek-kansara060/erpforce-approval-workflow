@@ -176,14 +176,45 @@ export const validateGraph = (graph: WorkflowGraph | null | undefined): GraphVal
     errors.push('Graph must have a trigger node');
   }
 
-  const targets = new Set(graph.edges.map((edge) => edge.target));
+  const nodeIds = new Set(graph.nodes.map((node) => node.id));
+  const edges = graph.edges ?? [];
+
+  const dangling = edges.filter((edge) => !nodeIds.has(edge.source) || !nodeIds.has(edge.target));
+  if (dangling.length > 0) {
+    errors.push(`Found ${dangling.length} edge(s) connected to a missing node`);
+  }
+
+  const selfLoops = edges.filter((edge) => edge.source === edge.target);
+  if (selfLoops.length > 0) {
+    errors.push(`Found ${selfLoops.length} edge(s) connecting a node to itself`);
+  }
+
+  const seen = new Set<string>();
+  let duplicates = 0;
+  for (const edge of edges) {
+    const key = `${edge.source}|${edge.sourceHandle ?? ''}|${edge.target}`;
+    if (seen.has(key)) duplicates += 1;
+    seen.add(key);
+  }
+  if (duplicates > 0) {
+    errors.push(`Found ${duplicates} duplicate edge(s)`);
+  }
+
+  const triggerIds = new Set(
+    graph.nodes.filter((node) => node.type === 'trigger').map((node) => node.id),
+  );
+  if (edges.some((edge) => triggerIds.has(edge.target))) {
+    errors.push('A trigger node cannot have an incoming edge');
+  }
+
+  const targets = new Set(edges.map((edge) => edge.target));
   const orphans = graph.nodes.filter((node) => node.type !== 'trigger' && !targets.has(node.id));
   if (orphans.length > 0) {
     errors.push(`Found ${orphans.length} disconnected node(s)`);
   }
 
   for (const criteria of graph.nodes.filter((node) => node.type === 'criteria')) {
-    const childEdges = graph.edges.filter((edge) => edge.source === criteria.id);
+    const childEdges = edges.filter((edge) => edge.source === criteria.id);
     const hasPass = childEdges.some((edge) => edge.sourceHandle === 'pass');
     const hasFail = childEdges.some((edge) => edge.sourceHandle === 'fail');
     if (!hasPass || !hasFail) {

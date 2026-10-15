@@ -13,7 +13,7 @@
  * Nothing else in `src/` may import `@erpsquad/common` directly.
  */
 
-export { default as Button } from '@erpsquad/common/components/button';
+export { Button } from './Button';
 export { default as Typography } from '@erpsquad/common/components/typography';
 export { default as Chip } from '@erpsquad/common/components/chip';
 export { default as TextField } from '@erpsquad/common/components/text-field';

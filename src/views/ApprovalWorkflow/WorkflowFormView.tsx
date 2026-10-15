@@ -4,8 +4,8 @@ import { AddIcon, AccountTreeOutlinedIcon as FlowIcon } from '../../ui/icons';
 import { FormProvider, useForm, useWatch } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 
-import { Button, ConfirmModal } from '../../ui';
-import { SURFACE } from '../../ui/tokens';
+import { Button, ConfirmModal, Typography } from '../../ui';
+import { TEXT_DANGER, SURFACE } from '../../ui/tokens';
 import { AsyncBoundary, EmptyState, LoadingState } from '../../components/feedback';
 import { PageHeader, PageShell, SectionCard } from '../../components/layout';
 import { WorkflowSummaryCard } from '../../components/workflow';
@@ -28,6 +28,7 @@ import {
   useNotifyError,
   useTranslate,
 } from '../../providers/useApprovalWorkflowConfig';
+import { validateGraph } from '../../utils/graph-transform';
 import { isTriggerNode } from '../../types/graph';
 import type { ScopeFilterDefinition } from '../../constants/options';
 import type { WorkflowGraph } from '../../types/graph';
@@ -108,6 +109,7 @@ export const WorkflowFormView = ({
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [pendingEntityChange, setPendingEntityChange] = useState<string | null>(null);
   const [hasSeenGuide, setHasSeenGuide] = useState(false);
+  const [publishAttempted, setPublishAttempted] = useState(false);
 
   const resolver = useMemo(
     () => yupResolver(createTranslatedWorkflowSchema(translate)),
@@ -291,7 +293,13 @@ export const WorkflowFormView = ({
     [mode, save, notify, t, navigate, routes.workflowList],
   );
 
-  const onPublish = handleSubmit((values) => submit(values, 'published'));
+  const onPublish = handleSubmit(
+    (values) => {
+      setPublishAttempted(true);
+      return submit(values, 'published');
+    },
+    () => setPublishAttempted(true),
+  );
   const onSaveDraft = useCallback(
     () => submit(getValues(), 'draft'),
     [submit, getValues],
@@ -299,6 +307,13 @@ export const WorkflowFormView = ({
 
   const canOpenBuilder = Boolean(entityType && workflowName);
   const hasFlow = Boolean(graph?.nodes?.length);
+
+  // Shown beside the section title once there is a flow to judge, or once a
+  // publish has been attempted (an empty flow is reported then).
+  const graphErrors = useMemo(
+    () => (hasFlow || publishAttempted ? validateGraph(graph).errors : []),
+    [hasFlow, publishAttempted, graph],
+  );
 
   const headerActions = (
     <>
@@ -381,6 +396,13 @@ export const WorkflowFormView = ({
                   title={t(I18N.workflow.approvalFlow)}
                   description={t(I18N.workflow.approvalFlowBody)}
                   required
+                  titleAside={
+                    graphErrors.length > 0 ? (
+                      <Typography type="s5" color={TEXT_DANGER} role="alert">
+                        {graphErrors.join(', ')}
+                      </Typography>
+                    ) : null
+                  }
                   collapsible
                   icon={<FlowIcon fontSize="small" />}
                   actions={
