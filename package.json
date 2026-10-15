@@ -1,0 +1,219 @@
+{
+  "name": "@erpsquad/approval-workflow",
+  "version": "1.0.3",
+  "description": "Module-agnostic approval workflow builder and approval dashboard for ERPForce modules",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.esm.js",
+  "types": "./dist/index.d.ts",
+  "_sideEffectsNote": "The package ships no stylesheet of its own — every component styles through the MUI theme. Only the builder pulls a stylesheet, and it belongs to @xyflow/react.",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "docs"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.esm.js"
+    },
+    "./views": {
+      "types": "./dist/views/index.d.ts",
+      "import": "./dist/views/index.esm.js",
+      "require": "./dist/views/index.cjs",
+      "default": "./dist/views/index.esm.js"
+    },
+    "./views/workflow": {
+      "types": "./dist/views/ApprovalWorkflow/index.d.ts",
+      "import": "./dist/views/ApprovalWorkflow/index.esm.js",
+      "require": "./dist/views/ApprovalWorkflow/index.cjs",
+      "default": "./dist/views/ApprovalWorkflow/index.esm.js"
+    },
+    "./views/dashboard": {
+      "types": "./dist/views/ApprovalDashboard/index.d.ts",
+      "import": "./dist/views/ApprovalDashboard/index.esm.js",
+      "require": "./dist/views/ApprovalDashboard/index.cjs",
+      "default": "./dist/views/ApprovalDashboard/index.esm.js"
+    },
+    "./components": {
+      "types": "./dist/components/index.d.ts",
+      "import": "./dist/components/index.esm.js",
+      "require": "./dist/components/index.cjs",
+      "default": "./dist/components/index.esm.js"
+    },
+    "./components/builder": {
+      "types": "./dist/components/builder/index.d.ts",
+      "import": "./dist/components/builder/index.esm.js",
+      "require": "./dist/components/builder/index.cjs",
+      "default": "./dist/components/builder/index.esm.js"
+    },
+    "./components/approval-history": {
+      "types": "./dist/components/approval-history/index.d.ts",
+      "import": "./dist/components/approval-history/index.esm.js",
+      "require": "./dist/components/approval-history/index.cjs",
+      "default": "./dist/components/approval-history/index.esm.js"
+    },
+    "./hooks": {
+      "types": "./dist/hooks/index.d.ts",
+      "import": "./dist/hooks/index.esm.js",
+      "require": "./dist/hooks/index.cjs",
+      "default": "./dist/hooks/index.esm.js"
+    },
+    "./providers": {
+      "types": "./dist/providers/index.d.ts",
+      "import": "./dist/providers/index.esm.js",
+      "require": "./dist/providers/index.cjs",
+      "default": "./dist/providers/index.esm.js"
+    },
+    "./api": {
+      "types": "./dist/api/index.d.ts",
+      "import": "./dist/api/index.esm.js",
+      "require": "./dist/api/index.cjs",
+      "default": "./dist/api/index.esm.js"
+    },
+    "./services": {
+      "types": "./dist/services/index.d.ts",
+      "import": "./dist/services/index.esm.js",
+      "require": "./dist/services/index.cjs",
+      "default": "./dist/services/index.esm.js"
+    },
+    "./adapters": {
+      "types": "./dist/adapters/index.d.ts",
+      "import": "./dist/adapters/index.esm.js",
+      "require": "./dist/adapters/index.cjs",
+      "default": "./dist/adapters/index.esm.js"
+    },
+    "./permissions": {
+      "types": "./dist/permissions/index.d.ts",
+      "import": "./dist/permissions/index.esm.js",
+      "require": "./dist/permissions/index.cjs",
+      "default": "./dist/permissions/index.esm.js"
+    },
+    "./schemas": {
+      "types": "./dist/schemas/index.d.ts",
+      "import": "./dist/schemas/index.esm.js",
+      "require": "./dist/schemas/index.cjs",
+      "default": "./dist/schemas/index.esm.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/types/index.esm.js",
+      "require": "./dist/types/index.cjs",
+      "default": "./dist/types/index.esm.js"
+    },
+    "./constants": {
+      "types": "./dist/constants/index.d.ts",
+      "import": "./dist/constants/index.esm.js",
+      "require": "./dist/constants/index.cjs",
+      "default": "./dist/constants/index.esm.js"
+    },
+    "./utils": {
+      "types": "./dist/utils/index.d.ts",
+      "import": "./dist/utils/index.esm.js",
+      "require": "./dist/utils/index.cjs",
+      "default": "./dist/utils/index.esm.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "dev": "vite build --watch --mode development",
+    "build": "npm run clean && vite build",
+    "clean": "rimraf dist",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts,.tsx --max-warnings 0",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "format": "prettier --write \"src/**/*.{ts,tsx,md}\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "validate": "npm run lint && npm run type-check && npm run test",
+    "validate:package": "node scripts/validate-package.mjs",
+    "prepublishOnly": "npm run build && npm run validate:package"
+  },
+  "keywords": [
+    "erp",
+    "approval",
+    "workflow",
+    "react",
+    "workflow-builder",
+    "erpsquad"
+  ],
+  "license": "MIT",
+  "dependencies": {},
+  "_peerDependenciesNote": "Optional peers are needed only by the entries that use them: @xyflow/react by the workflow builder (loaded lazily by the workflow screens); react-hook-form, @hookform/resolvers and yup by the workflow form (views/workflow, schemas, and the root entry). The dashboard and approval-history entries need none of them.",
+  "peerDependencies": {
+    "@emotion/react": "^11.0.0",
+    "@emotion/styled": "^11.0.0",
+    "@erpsquad/common": ">=1.11.0",
+    "@hookform/resolvers": "^3.0.0",
+    "@mui/icons-material": "^5.15.0",
+    "@mui/material": "^5.15.0",
+    "@xyflow/react": "^12.0.0",
+    "react": "^18.2.0 || ^19.0.0",
+    "react-dom": "^18.2.0 || ^19.0.0",
+    "react-hook-form": "^7.50.0",
+    "yup": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@xyflow/react": {
+      "optional": true
+    },
+    "@hookform/resolvers": {
+      "optional": true
+    },
+    "react-hook-form": {
+      "optional": true
+    },
+    "yup": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@hookform/resolvers": "^3.10.0",
+    "@mui/icons-material": "^5.18.0",
+    "@mui/material": "^5.18.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^14.3.1",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@typescript-eslint/eslint-plugin": "^6.14.0",
+    "@typescript-eslint/parser": "^6.14.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/coverage-v8": "^1.6.0",
+    "@xyflow/react": "^12.10.0",
+    "eslint": "^8.55.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "jsdom": "^23.2.0",
+    "prettier": "^3.1.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hook-form": "^7.58.1",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.2.2",
+    "vite": "^5.4.21",
+    "vite-plugin-dts": "^3.9.1",
+    "vitest": "^1.6.0",
+    "yup": "^1.7.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/erpforce/approval-workflow.git"
+  },
+  "bugs": {
+    "url": "https://github.com/erpforce/approval-workflow/issues"
+  },
+  "homepage": "https://github.com/erpforce/approval-workflow#readme"
+}
