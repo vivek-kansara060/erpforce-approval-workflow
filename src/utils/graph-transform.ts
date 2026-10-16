@@ -227,16 +227,40 @@ export const validateGraph = (graph: WorkflowGraph | null | undefined): GraphVal
   return { isValid: errors.length === 0, errors };
 };
 
-/** Counts used by the workflow summary card. */
+const RESULT_TYPES: ReadonlySet<string> = new Set([
+  'action',
+  'criteriaResult',
+  'actionResult',
+  'pass',
+  'fail',
+]);
+
+/**
+ * Counts used by the workflow summary card.
+ *
+ * One pass over the nodes. A branching node is judged by what it holds as well
+ * as by its `type`: a node carrying `conditions` is a criteria even when it was
+ * persisted under another type, which is what made such nodes show up as
+ * actions. Pass/Fail result nodes count as actions.
+ */
 export const summarizeGraph = (graph: WorkflowGraph | null | undefined) => {
   const nodes = graph?.nodes ?? [];
-  const countOf = (types: readonly string[]) =>
-    nodes.filter((node) => types.includes(node.type)).length;
+  let triggers = 0;
+  let criteria = 0;
+  let actions = 0;
 
-  return {
-    triggers: countOf(['trigger']),
-    criteria: countOf(['criteria']),
-    actions: countOf(['action', 'criteriaResult', 'actionResult', 'pass', 'fail']),
-    total: nodes.length,
-  };
+  for (const node of nodes) {
+    if (node.type === 'trigger') {
+      triggers++;
+    } else if (
+      node.type === 'criteria' ||
+      (node.type === 'action' && Array.isArray((node.data as CriteriaNodeData)?.conditions))
+    ) {
+      criteria++;
+    } else if (RESULT_TYPES.has(node.type)) {
+      actions++;
+    }
+  }
+
+  return { triggers, criteria, actions, total: nodes.length };
 };

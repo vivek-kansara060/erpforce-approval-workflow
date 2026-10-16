@@ -92,13 +92,9 @@ export const WorkflowFormView = ({
   // renders, not a second request.
   const { options: requestTypes } = useReferenceOptions('action_type');
 
-  const {
-    workflow,
-    formValues,
-    isLoading,
-    error,
-    refetch,
-  } = useWorkflow(workflowId, { mode: duplicate ? 'duplicate' : 'edit' });
+  const { workflow, formValues, isLoading, error, refetch } = useWorkflow(workflowId, {
+    mode: duplicate ? 'duplicate' : 'edit',
+  });
 
   // A failed save used to do nothing visible: `save` resolves `undefined` and
   // the submit handler simply returned. The user now sees why.
@@ -128,10 +124,17 @@ export const WorkflowFormView = ({
 
   // Hydrate once the record arrives. `reset` keeps the form pristine, so the
   // dirty-field checks below reflect the user's edits only.
+  // `hydratedId` gates the builder: it reads `initialGraph` once on mount, so
+  // mounting it before this reset ran seeded it with an empty graph.
+  const [hydratedId, setHydratedId] = useState<string | undefined>();
+
   useEffect(() => {
     if (!workflowId || isLoading) return;
     reset({ [WORKFLOW_FORM_NAME]: formValues });
+    setHydratedId(workflowId);
   }, [workflowId, isLoading, formValues, reset]);
+
+  const isHydrated = !workflowId || hydratedId === workflowId;
 
   /**
    * Seeds a brand-new workflow from context: the default request type, and the
@@ -174,9 +177,7 @@ export const WorkflowFormView = ({
     if (!latch.company && currentUser?.company_id != null) {
       latch.company = true;
       if (!current?.[WORKFLOW_FIELDS.COMPANY_IDS]?.length) {
-        setValue(`${WORKFLOW_FORM_NAME}.${WORKFLOW_FIELDS.COMPANY_IDS}`, [
-          currentUser.company_id,
-        ]);
+        setValue(`${WORKFLOW_FORM_NAME}.${WORKFLOW_FIELDS.COMPANY_IDS}`, [currentUser.company_id]);
       }
     }
   }, [mode, isLoading, requestTypes, currentUser?.company_id, getValues, setValue]);
@@ -300,10 +301,7 @@ export const WorkflowFormView = ({
     },
     () => setPublishAttempted(true),
   );
-  const onSaveDraft = useCallback(
-    () => submit(getValues(), 'draft'),
-    [submit, getValues],
-  );
+  const onSaveDraft = useCallback(() => submit(getValues(), 'draft'), [submit, getValues]);
 
   const canOpenBuilder = Boolean(entityType && workflowName);
   const hasFlow = Boolean(graph?.nodes?.length);
@@ -355,31 +353,31 @@ export const WorkflowFormView = ({
                   ? t(I18N.workflow.builder)
                   : t(mode === 'create' ? I18N.workflow.add : I18N.workflow.edit)
               }
-              subtitle={
-                isBuilderOpen
-                  ? labelOf(entityType) || undefined
-                  : workflow?.series_number
-              }
+              subtitle={isBuilderOpen ? labelOf(entityType) || undefined : workflow?.series_number}
               onBack={isBuilderOpen ? () => setIsBuilderOpen(false) : undefined}
               backLabel={t(I18N.common.back)}
               actions={headerActions}
             />
 
             {isBuilderOpen ? (
-              <Suspense fallback={<LoadingState variant="page" />}>
-                <WorkflowBuilder
-                  showHeader={false}
-                  initialGraph={graph}
-                  onChange={handleGraphChange}
-                  onBack={() => setIsBuilderOpen(false)}
-                  entityType={entityType}
-                  entityLabel={labelOf(entityType)}
-                  scope={scope}
-                  onScopeChange={handleScopeChange}
-                  scopeFilters={scopeFilters}
-                  showScopeFilters={showScopeFilters}
-                />
-              </Suspense>
+              !isHydrated ? (
+                <LoadingState variant="page" />
+              ) : (
+                <Suspense fallback={<LoadingState variant="page" />}>
+                  <WorkflowBuilder
+                    showHeader={false}
+                    initialGraph={graph}
+                    onChange={handleGraphChange}
+                    onBack={() => setIsBuilderOpen(false)}
+                    entityType={entityType}
+                    entityLabel={labelOf(entityType)}
+                    scope={scope}
+                    onScopeChange={handleScopeChange}
+                    scopeFilters={scopeFilters}
+                    showScopeFilters={showScopeFilters}
+                  />
+                </Suspense>
+              )
             ) : (
               <PageShell maxWidth={FORM_MAX_WIDTH}>
                 <SectionCard

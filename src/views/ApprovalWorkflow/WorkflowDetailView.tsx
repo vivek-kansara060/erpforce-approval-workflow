@@ -1,6 +1,9 @@
 import { Suspense, lazy, useCallback, useMemo, useState } from 'react';
 import { Box, Grid, MenuItem } from '@mui/material';
-import { AccountTreeOutlinedIcon as FlowIcon, KeyboardArrowDownIcon as ArrowDownIcon } from '../../ui/icons';
+import {
+  AccountTreeOutlinedIcon as FlowIcon,
+  KeyboardArrowDownIcon as ArrowDownIcon,
+} from '../../ui/icons';
 import { Button, ConfirmModal, Menu, Typography, ValueField } from '../../ui';
 import { SURFACE, TEXT_DANGER, TEXT_STRONG } from '../../ui/tokens';
 import { AsyncBoundary, LoadingState } from '../../components/feedback';
@@ -71,10 +74,7 @@ export const WorkflowDetailView = ({ workflowId, formatDate }: WorkflowDetailVie
     navigate(routes.workflowList);
   }, [workflow?.id, remove, notify, t, navigate, routes.workflowList]);
 
-  const goToEditor = useCallback(() => {
-    if (!workflow?.id) return;
-    navigate(`${withId(routes.workflowEdit, workflow.id)}?builder=1`);
-  }, [workflow?.id, navigate, routes.workflowEdit]);
+  const openFlow = useCallback(() => setIsFlowOpen(true), []);
 
   const hasActions = permissions['workflow.edit'] || permissions['workflow.delete'];
 
@@ -83,7 +83,9 @@ export const WorkflowDetailView = ({ workflowId, formatDate }: WorkflowDetailVie
       <AsyncBoundary isLoading={isLoading} error={error} onRetry={refetch} variant="page">
         <Box sx={{ bgcolor: SURFACE, minHeight: '100%' }}>
           <PageHeader
-            title={isFlowOpen ? t(I18N.workflow.builder) : (workflow?.name ?? t(I18N.workflow.title))}
+            title={
+              isFlowOpen ? t(I18N.workflow.builder) : (workflow?.name ?? t(I18N.workflow.title))
+            }
             subtitle={isFlowOpen ? labelOf(workflow?.entity_type) : workflow?.series_number}
             adornment={
               isFlowOpen ? undefined : <WorkflowStatusChip isActive={workflow?.is_active} />
@@ -192,13 +194,10 @@ export const WorkflowDetailView = ({ workflowId, formatDate }: WorkflowDetailVie
                   <Button
                     variant="outlined"
                     size="small"
-                    onClick={
-                      permissions['workflow.edit'] ? goToEditor : () => setIsFlowOpen(true)
-                    }
+                    // Viewing stays read-only: editing is the Actions menu's job.
+                    onClick={openFlow}
                   >
-                    {permissions['workflow.edit']
-                      ? t(I18N.workflow.openInEditor)
-                      : t(I18N.common.view)}
+                    {t(I18N.workflow.openInEditor)}
                   </Button>
                 }
               >
