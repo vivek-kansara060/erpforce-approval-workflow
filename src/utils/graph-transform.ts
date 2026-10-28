@@ -228,20 +228,25 @@ export const validateGraph = (graph: WorkflowGraph | null | undefined): GraphVal
 };
 
 const RESULT_TYPES: ReadonlySet<string> = new Set([
-  'action',
   'criteriaResult',
   'actionResult',
   'pass',
   'fail',
 ]);
 
+const stageCount = (node: WorkflowNode): number => {
+  const stages = (node.data as { action?: unknown } | undefined)?.action;
+  return Array.isArray(stages) ? stages.length : 0;
+};
+
 /**
  * Counts used by the workflow summary card.
  *
- * One pass over the nodes. A branching node is judged by what it holds as well
- * as by its `type`: a node carrying `conditions` is a criteria even when it was
- * persisted under another type, which is what made such nodes show up as
- * actions. Pass/Fail result nodes count as actions.
+ * `actions` is what the flow actually does: the approval stages configured on
+ * action nodes and on Pass/Fail branches. The branches themselves are not
+ * counted — each action or criteria node auto-creates a pair, so counting them
+ * reported two actions nobody defined. An action node with no stages yet still
+ * counts as one. One pass over the nodes.
  */
 export const summarizeGraph = (graph: WorkflowGraph | null | undefined) => {
   const nodes = graph?.nodes ?? [];
@@ -250,16 +255,10 @@ export const summarizeGraph = (graph: WorkflowGraph | null | undefined) => {
   let actions = 0;
 
   for (const node of nodes) {
-    if (node.type === 'trigger') {
-      triggers++;
-    } else if (
-      node.type === 'criteria' ||
-      (node.type === 'action' && Array.isArray((node.data as CriteriaNodeData)?.conditions))
-    ) {
-      criteria++;
-    } else if (RESULT_TYPES.has(node.type)) {
-      actions++;
-    }
+    if (node.type === 'trigger') triggers++;
+    else if (node.type === 'criteria') criteria++;
+    else if (node.type === 'action') actions += Math.max(1, stageCount(node));
+    else if (RESULT_TYPES.has(node.type)) actions += stageCount(node);
   }
 
   return { triggers, criteria, actions, total: nodes.length };

@@ -10,8 +10,17 @@ import type {
 
 const stripTrailingSlash = (url: string) => (url.endsWith('/') ? url.slice(0, -1) : url);
 
+/**
+ * `hrms` and `organization` are the same backend (`<gateway>/hrms`), so a host
+ * that only mapped `organization` (every existing one) already reaches the
+ * employee directory without a new entry.
+ */
 export const resolveBaseUrl = (baseUrls: ServiceBaseUrls, service: HttpRequest['service']) =>
-  stripTrailingSlash(baseUrls[service] ?? baseUrls.default);
+  stripTrailingSlash(
+    baseUrls[service] ??
+      (service === 'hrms' ? baseUrls.organization : undefined) ??
+      baseUrls.default,
+  );
 
 /** Serialises query params, repeating the key for arrays (ERP gateway style). */
 export const buildQueryString = (query: QueryParams | undefined): string => {

@@ -22,10 +22,12 @@ import type { SvgIconComponent } from '@mui/icons-material';
 import AccountTreeOutlinedModule from '@mui/icons-material/AccountTreeOutlined';
 import AddModule from '@mui/icons-material/Add';
 import ArrowBackModule from '@mui/icons-material/ArrowBack';
+import ArrowDownwardModule from '@mui/icons-material/ArrowDownward';
 import ArrowUpwardModule from '@mui/icons-material/ArrowUpward';
 import BackspaceOutlinedModule from '@mui/icons-material/BackspaceOutlined';
 import BlockModule from '@mui/icons-material/Block';
 import CenterFocusStrongModule from '@mui/icons-material/CenterFocusStrong';
+import ContentCopyOutlinedModule from '@mui/icons-material/ContentCopyOutlined';
 import CheckModule from '@mui/icons-material/Check';
 import CheckCircleOutlineModule from '@mui/icons-material/CheckCircleOutline';
 import CloseModule from '@mui/icons-material/Close';
@@ -41,9 +43,11 @@ import KeyboardArrowDownModule from '@mui/icons-material/KeyboardArrowDown';
 import LockOutlinedModule from '@mui/icons-material/LockOutlined';
 import OpenInNewModule from '@mui/icons-material/OpenInNew';
 import PersonOutlineOutlinedModule from '@mui/icons-material/PersonOutlineOutlined';
+import RedoModule from '@mui/icons-material/Redo';
 import RemoveModule from '@mui/icons-material/Remove';
 import SearchModule from '@mui/icons-material/Search';
 import SendOutlinedModule from '@mui/icons-material/SendOutlined';
+import UndoModule from '@mui/icons-material/Undo';
 
 /** The component, whether the bundler handed over it or its `module.exports`. */
 export const icon = (imported: SvgIconComponent): SvgIconComponent =>
@@ -52,9 +56,11 @@ export const icon = (imported: SvgIconComponent): SvgIconComponent =>
 export const AccountTreeOutlinedIcon = /* @__PURE__ */ icon(AccountTreeOutlinedModule);
 export const AddIcon = /* @__PURE__ */ icon(AddModule);
 export const ArrowBackIcon = /* @__PURE__ */ icon(ArrowBackModule);
+export const ArrowDownwardIcon = /* @__PURE__ */ icon(ArrowDownwardModule);
 export const ArrowUpwardIcon = /* @__PURE__ */ icon(ArrowUpwardModule);
 export const BackspaceOutlinedIcon = /* @__PURE__ */ icon(BackspaceOutlinedModule);
 export const BlockIcon = /* @__PURE__ */ icon(BlockModule);
+export const ContentCopyOutlinedIcon = /* @__PURE__ */ icon(ContentCopyOutlinedModule);
 export const CenterFocusStrongIcon = /* @__PURE__ */ icon(CenterFocusStrongModule);
 export const CheckIcon = /* @__PURE__ */ icon(CheckModule);
 export const CheckCircleOutlineIcon = /* @__PURE__ */ icon(CheckCircleOutlineModule);
@@ -71,6 +77,8 @@ export const KeyboardArrowDownIcon = /* @__PURE__ */ icon(KeyboardArrowDownModul
 export const LockOutlinedIcon = /* @__PURE__ */ icon(LockOutlinedModule);
 export const OpenInNewIcon = /* @__PURE__ */ icon(OpenInNewModule);
 export const PersonOutlineOutlinedIcon = /* @__PURE__ */ icon(PersonOutlineOutlinedModule);
+export const RedoIcon = /* @__PURE__ */ icon(RedoModule);
+export const UndoIcon = /* @__PURE__ */ icon(UndoModule);
 export const RemoveIcon = /* @__PURE__ */ icon(RemoveModule);
 export const SearchIcon = /* @__PURE__ */ icon(SearchModule);
 export const SendOutlinedIcon = /* @__PURE__ */ icon(SendOutlinedModule);

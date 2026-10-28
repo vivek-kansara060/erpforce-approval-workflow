@@ -22,6 +22,8 @@ export type ServiceName =
   | 'rbac'
   /** Organisation structure (hierarchy levels). */
   | 'organization'
+  /** Employee directory. Only called when the user holds `employee` access. */
+  | 'hrms'
   | 'default';
 
 export type QueryPrimitive = string | number | boolean;

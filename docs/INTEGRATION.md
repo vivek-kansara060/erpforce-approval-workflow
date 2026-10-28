@@ -47,6 +47,7 @@ export const http = createFetchHttpClient({
     systemFeature: `${gateway}/system-feature`,
     rbac: `${gateway}/rbac`,
     organization: `${gateway}/hrms`,
+    hrms: `${gateway}/hrms`,
   },
   getHeaders: () => getToken(),
 });
@@ -83,8 +84,9 @@ Reject on a non-2xx response; the package normalises whatever you throw.
 | --- | --- |
 | `workflowAutomation` | `/v1/workflows`, `/v1/workflow-references/*`, `/v1/approvals*` |
 | `systemFeature` | `/v1/form-builder/mongo-schema-fields/:name`, `/v1/filter/filter-table` |
-| `rbac` | `/v1/user/modules` |
+| `rbac` | `/v1/user/modules`, `/v1/user/` (approver directory) |
 | `organization` | `/v1/organisation-structure/hierarchy-levels` |
+| `hrms` | `/v1/employee/` (approver directory; only called with `employee` access, falls back to `organization`, then `default`) |
 
 ---
 

@@ -13,6 +13,7 @@ export const queryKeys = {
     all: ['workflow'] as const,
     list: (query: ListQuery) => ['workflow', 'list', query] as const,
     detail: (id: string) => ['workflow', 'detail', id] as const,
+    history: (id: string) => ['workflow', 'history', id] as const,
   },
   approval: {
     all: ['approval'] as const,
@@ -37,6 +38,9 @@ export const queryKeys = {
     entityFields: (entityType: string) => ['reference', 'entityFields', entityType] as const,
     schemaFields: (name: string) => ['reference', 'schemaFields', name] as const,
     hierarchyLevels: (scopeKey: string) => ['reference', 'hierarchyLevels', scopeKey] as const,
+    /** One merged users + employees directory per company scope and source mix. */
+    approverDirectory: (scopeKey: string, withEmployees: boolean) =>
+      ['reference', 'approverDirectory', scopeKey, withEmployees] as const,
     filterTable: (table: string, search: string, skip: number, limit: number) =>
       ['reference', 'filterTable', table, search, skip, limit] as const,
   },

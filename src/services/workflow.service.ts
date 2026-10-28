@@ -4,8 +4,13 @@ import { hasScopeSelection, toWorkflowPayload } from '../utils/workflow-payload'
 import { validateGraph } from '../utils/graph-transform';
 import type { QueryCache } from '../query/cache';
 import type { ListQuery, ListResult } from '../types/common';
-import type { Workflow, WorkflowFormValues } from '../types/workflow';
-import type { WorkflowApi } from '../api/workflow.api';
+import type {
+  SimulationResult,
+  Workflow,
+  WorkflowFormValues,
+  WorkflowHistoryEntry,
+} from '../types/workflow';
+import type { SimulateWorkflowInput, WorkflowApi } from '../api/workflow.api';
 
 export interface WorkflowValidationResult {
   isValid: boolean;
@@ -27,6 +32,9 @@ export interface WorkflowService {
   validate(input: SaveWorkflowInput): WorkflowValidationResult;
   save(input: SaveWorkflowInput): Promise<Workflow>;
   remove(id: string): Promise<void>;
+  toggle(id: string): Promise<boolean>;
+  simulate(input: SimulateWorkflowInput): Promise<SimulationResult>;
+  history(id: string, signal?: AbortSignal): Promise<WorkflowHistoryEntry[]>;
 }
 
 /**
@@ -100,6 +108,17 @@ export const createWorkflowService = (deps: {
     async remove(id) {
       await api.remove(id);
       cache.invalidate(queryKeys.workflow.all);
+    },
+
+    history: (id, signal) => api.history(id, signal),
+
+    // Read-only on the server, so the cache is left alone.
+    simulate: (input) => api.simulate(input),
+
+    async toggle(id) {
+      const isActive = await api.toggle(id);
+      cache.invalidate(queryKeys.workflow.all);
+      return isActive;
     },
   };
 };

@@ -8,7 +8,8 @@ import { Button, ConfirmModal, Typography } from '../../ui';
 import { TEXT_DANGER, SURFACE } from '../../ui/tokens';
 import { AsyncBoundary, EmptyState, LoadingState } from '../../components/feedback';
 import { PageHeader, PageShell, SectionCard } from '../../components/layout';
-import { WorkflowSummaryCard } from '../../components/workflow';
+import { WorkflowLifecycleChip, WorkflowSummaryCard } from '../../components/workflow';
+import { ScopeFilterBar } from '../../components/builder/ScopeFilterBar';
 import { FlowGuideModal } from '../../components/modals';
 import { PermissionGate } from '../../permissions/PermissionGate';
 import { I18N } from '../../constants/i18n-keys';
@@ -53,6 +54,12 @@ export interface WorkflowFormViewProps {
   /** Start on the canvas instead of the details form. */
   openBuilder?: boolean;
   scopeFilters?: ScopeFilterDefinition[];
+  /**
+   * Show the "Applies to" scope picker, on the form and inside the builder.
+   * Hidden by default for now: a new workflow is scoped to the signed-in user's
+   * company, and an existing one keeps the scope it was saved with.
+   * @default false
+   */
   showScopeFilters?: boolean;
   /** Show the first-run builder tutorial. @default true for `create` */
   showFlowGuide?: boolean;
@@ -80,7 +87,7 @@ export const WorkflowFormView = ({
   duplicate = false,
   openBuilder = false,
   scopeFilters,
-  showScopeFilters = true,
+  showScopeFilters = false,
   showFlowGuide,
   flowGuideIllustration,
 }: WorkflowFormViewProps) => {
@@ -106,6 +113,8 @@ export const WorkflowFormView = ({
   const [pendingEntityChange, setPendingEntityChange] = useState<string | null>(null);
   const [hasSeenGuide, setHasSeenGuide] = useState(false);
   const [publishAttempted, setPublishAttempted] = useState(false);
+  const [pendingPublish, setPendingPublish] = useState<FormShape | null>(null);
+  const [isDiscardOpen, setIsDiscardOpen] = useState(false);
 
   const resolver = useMemo(
     () => yupResolver(createTranslatedWorkflowSchema(translate)),
@@ -120,7 +129,14 @@ export const WorkflowFormView = ({
     },
   });
 
-  const { control, handleSubmit, reset, getValues, setValue } = methods;
+  const {
+    control,
+    handleSubmit,
+    reset,
+    getValues,
+    setValue,
+    formState: { isDirty },
+  } = methods;
 
   // Hydrate once the record arrives. `reset` keeps the form pristine, so the
   // dirty-field checks below reflect the user's edits only.
@@ -294,13 +310,42 @@ export const WorkflowFormView = ({
     [mode, save, notify, t, navigate, routes.workflowList],
   );
 
+  // A workflow that is already live is updated straight away; the first
+  // publish asks, since it is what makes requests start following the flow.
+  const isLive = mode === 'edit' && !duplicate && workflow?.status === 'published';
+
   const onPublish = handleSubmit(
     (values) => {
       setPublishAttempted(true);
-      return submit(values, 'published');
+      if (isLive) return submit(values, 'published');
+      setPendingPublish(values);
+      return undefined;
     },
     () => setPublishAttempted(true),
   );
+  const confirmPublish = useCallback(async () => {
+    if (!pendingPublish) return;
+    await submit(pendingPublish, 'published');
+    setPendingPublish(null);
+  }, [pendingPublish, submit]);
+
+  // Leaving with unsaved work asks first. The browser's own prompt covers a
+  // reload or tab close; in-app Discard has its own dialog.
+  useEffect(() => {
+    if (!isDirty || isSaving) return undefined;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [isDirty, isSaving]);
+
+  const handleDiscard = useCallback(() => {
+    if (isDirty) setIsDiscardOpen(true);
+    else navigate(routes.workflowList);
+  }, [isDirty, navigate, routes.workflowList]);
+
   const onSaveDraft = useCallback(() => submit(getValues(), 'draft'), [submit, getValues]);
 
   const canOpenBuilder = Boolean(entityType && workflowName);
@@ -318,7 +363,7 @@ export const WorkflowFormView = ({
       <Button
         type="button"
         variant="outlined"
-        onClick={() => navigate(routes.workflowList)}
+        onClick={handleDiscard}
         disabled={isSaving}
       >
         {t(I18N.common.discard)}
@@ -329,7 +374,7 @@ export const WorkflowFormView = ({
         </Button>
       ) : null}
       <Button type="submit" variant="contained" loading={isSaving}>
-        {t(I18N.common.save)}
+        {t(isLive ? I18N.common.update : I18N.common.save)}
       </Button>
     </>
   );
@@ -354,6 +399,11 @@ export const WorkflowFormView = ({
                   : t(mode === 'create' ? I18N.workflow.add : I18N.workflow.edit)
               }
               subtitle={isBuilderOpen ? labelOf(entityType) || undefined : workflow?.series_number}
+              adornment={
+                isBuilderOpen || mode === 'create' ? undefined : (
+                  <WorkflowLifecycleChip status={workflow?.status} />
+                )
+              }
               onBack={isBuilderOpen ? () => setIsBuilderOpen(false) : undefined}
               backLabel={t(I18N.common.back)}
               actions={headerActions}
@@ -389,6 +439,22 @@ export const WorkflowFormView = ({
                     seriesNumber={workflow?.series_number}
                   />
                 </SectionCard>
+
+                {showScopeFilters ? (
+                  <SectionCard
+                    title={t(I18N.workflow.scopeSection)}
+                    description={t(I18N.workflow.scopeSectionBody)}
+                    required
+                    disableBodyPadding
+                  >
+                    <ScopeFilterBar
+                      scope={scope}
+                      onChange={handleScopeChange}
+                      filters={scopeFilters}
+                      label={t(I18N.workflow.appliesTo)}
+                    />
+                  </SectionCard>
+                ) : null}
 
                 <SectionCard
                   title={t(I18N.workflow.approvalFlow)}
@@ -452,6 +518,25 @@ export const WorkflowFormView = ({
           open={isGuideOpen}
           onClose={() => setIsGuideOpen(false)}
           illustration={flowGuideIllustration}
+        />
+
+        <ConfirmModal
+          open={Boolean(pendingPublish)}
+          onClose={() => setPendingPublish(null)}
+          onConfirm={confirmPublish}
+          loading={isSaving}
+          title={t(I18N.workflow.publishTitle)}
+          description={t(I18N.workflow.publishBody)}
+          buttonTexts={{ confirm: t(I18N.common.publish), cancel: t(I18N.common.cancel) }}
+        />
+
+        <ConfirmModal
+          open={isDiscardOpen}
+          onClose={() => setIsDiscardOpen(false)}
+          onConfirm={() => navigate(routes.workflowList)}
+          title={t(I18N.common.warning)}
+          description={t(I18N.workflow.discardBody)}
+          buttonTexts={{ confirm: t(I18N.common.discard), cancel: t(I18N.workflow.keepEditing) }}
         />
 
         <ConfirmModal

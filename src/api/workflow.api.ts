@@ -2,7 +2,13 @@ import { ENDPOINTS } from './endpoints';
 import { toWorkflowScope } from '../utils/workflow-payload';
 import type { HttpClient } from '../types/http';
 import type { ListQuery, ListResult } from '../types/common';
-import type { Workflow, WorkflowWritePayload } from '../types/workflow';
+import type {
+  SimulationResult,
+  Workflow,
+  WorkflowHistoryEntry,
+  WorkflowWritePayload,
+} from '../types/workflow';
+import type { WorkflowGraph } from '../types/graph';
 
 /** Raw gateway envelopes, narrowed here so nothing downstream sees `any`. */
 interface WorkflowListEnvelope {
@@ -28,12 +34,25 @@ const normalizeWorkflow = (raw: RawWorkflow): Workflow =>
     ...toWorkflowScope(raw),
   }) as Workflow;
 
+export interface SimulateWorkflowInput {
+  /** The graph in its saved shape, so an unsaved draft can be tried too. */
+  graph: WorkflowGraph;
+  entityData: Record<string, unknown>;
+  entityType?: string;
+  module?: string;
+}
+
 export interface WorkflowApi {
   list(query: ListQuery, signal?: AbortSignal): Promise<ListResult<Workflow>>;
   getById(id: string, signal?: AbortSignal): Promise<Workflow>;
   create(payload: WorkflowWritePayload): Promise<Workflow>;
   update(payload: WorkflowWritePayload & { id: string }): Promise<Workflow>;
   remove(id: string): Promise<void>;
+  /** Resolves the workflow's new `is_active`. */
+  toggle(id: string): Promise<boolean>;
+  history(id: string, signal?: AbortSignal): Promise<WorkflowHistoryEntry[]>;
+  /** Dry run: which path would this sample record take? Writes nothing. */
+  simulate(input: SimulateWorkflowInput, signal?: AbortSignal): Promise<SimulationResult>;
 }
 
 /**
@@ -94,5 +113,40 @@ export const createWorkflowApi = (http: HttpClient): WorkflowApi => ({
       method: 'DELETE',
       path: ENDPOINTS.workflowById(id),
     });
+  },
+
+  async history(id, signal) {
+    const response = await http<{ data?: { history?: WorkflowHistoryEntry[] } }>({
+      service: 'workflowAutomation',
+      method: 'GET',
+      path: ENDPOINTS.workflowHistory(id),
+      signal,
+    });
+    return response?.data?.history ?? [];
+  },
+
+  async simulate(input, signal) {
+    const response = await http<{ data?: SimulationResult }>({
+      service: 'workflowAutomation',
+      method: 'POST',
+      path: ENDPOINTS.workflowSimulate,
+      signal,
+      body: {
+        graph: input.graph,
+        entity_data: input.entityData,
+        entity_type: input.entityType,
+        module: input.module,
+      },
+    });
+    return response?.data ?? { trigger: null, steps: [], outcome: 'no-trigger' };
+  },
+
+  async toggle(id) {
+    const response = await http<{ data?: { is_active?: boolean } }>({
+      service: 'workflowAutomation',
+      method: 'POST',
+      path: ENDPOINTS.workflowToggle(id),
+    });
+    return Boolean(response?.data?.is_active);
   },
 });

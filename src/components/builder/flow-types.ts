@@ -16,6 +16,7 @@ export interface NodeCallbacks {
   onDelete: (nodeId: string) => void;
   onAddCriteria: (nodeId: string) => void;
   onAddAction: (nodeId: string) => void;
+  onDuplicate: (nodeId: string) => void;
 }
 
 export type FlowNodeData = WorkflowNodeData & Partial<NodeCallbacks> & Record<string, unknown>;
@@ -23,9 +24,17 @@ export type FlowNodeData = WorkflowNodeData & Partial<NodeCallbacks> & Record<st
 export type FlowNode = Node<FlowNodeData>;
 export type FlowEdge = Edge;
 
+export interface FlowNodeOptions {
+  /** Type of the node's parent, so a Pass/Fail branch knows what it hangs off. */
+  parentType?: string;
+  /** Defaults to "has callbacks". A view-only canvas passes callbacks but not drag. */
+  draggable?: boolean;
+}
+
 export const toFlowNode = (
   node: WorkflowNode,
-  callbacks: NodeCallbacks | null,
+  callbacks: Partial<NodeCallbacks> | null,
+  options: FlowNodeOptions = {},
 ): FlowNode =>
   ({
     id: node.id,
@@ -35,11 +44,20 @@ export const toFlowNode = (
     // React Flow re-parents children when `parentId` is set; the package uses
     // it only to describe graph ancestry, so it is passed through node data.
     data: callbacks
-      ? ({ ...node.data, ...callbacks, parentNodeId: node.parentId } as FlowNodeData)
-      : ({ ...node.data, parentNodeId: node.parentId } as FlowNodeData),
+      ? ({
+          ...node.data,
+          ...callbacks,
+          parentNodeId: node.parentId,
+          parentType: options.parentType,
+        } as FlowNodeData)
+      : ({
+          ...node.data,
+          parentNodeId: node.parentId,
+          parentType: options.parentType,
+        } as FlowNodeData),
     measured: node.measured,
     selected: node.selected,
-    draggable: Boolean(callbacks),
+    draggable: options.draggable ?? Boolean(callbacks),
   }) as FlowNode;
 
 export const toWorkflowNode = (node: FlowNode, original: WorkflowNode): WorkflowNode => ({

@@ -1,5 +1,7 @@
 export { SidebarShell } from './SidebarShell';
 export type { SidebarShellProps } from './SidebarShell';
+export { TestRunDrawer } from './TestRunDrawer';
+export type { TestRunDrawerProps } from './TestRunDrawer';
 export { TriggerSidebar } from './TriggerSidebar';
 export type { TriggerSidebarProps } from './TriggerSidebar';
 export { CriteriaSidebar } from './CriteriaSidebar';

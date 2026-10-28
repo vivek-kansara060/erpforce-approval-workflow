@@ -27,6 +27,8 @@ export interface CriteriaConditionRowProps {
   onRemove: (index: number) => void;
   /** False for the last remaining rule, which cannot be removed. */
   canRemove: boolean;
+  /** Show the saved values without letting them be changed. */
+  readOnly?: boolean;
 }
 
 /**
@@ -49,6 +51,7 @@ const CriteriaConditionRowComponent = ({
   onConditionTypeChange,
   onRemove,
   canRemove,
+  readOnly = false,
 }: CriteriaConditionRowProps) => {
   const t = useTranslate();
 
@@ -76,12 +79,13 @@ const CriteriaConditionRowComponent = ({
           {`${t(I18N.sidebar.condition)} ${index + 1}`}
         </Typography>
       }
-      onRemove={canRemove ? () => onRemove(index) : undefined}
+      onRemove={canRemove && !readOnly ? () => onRemove(index) : undefined}
       removeLabel={`${t(I18N.common.delete)} ${t(I18N.sidebar.condition)} ${index + 1}`}
       bodyGap={1.5}
     >
       <FormField label={t(I18N.sidebar.conditionTypeLabel)}>
         <SearchableSelect
+          disabled={readOnly}
           options={CONDITION_TYPE_OPTIONS}
           size="small"
           value={conditionType}
@@ -95,6 +99,7 @@ const CriteriaConditionRowComponent = ({
       {conditionType === 'formula' ? (
         <FormField label={t(I18N.sidebar.expressionLabel)}>
           <FormulaEditor
+            disabled={readOnly}
             value={rule.expression ?? ''}
             fields={fieldGroups}
             onChange={(expression: string) => onChange(index, { expression })}
@@ -105,6 +110,7 @@ const CriteriaConditionRowComponent = ({
       ) : (
         <FormField label={t(I18N.sidebar.fieldLabel)}>
           <SearchableSelect
+            disabled={readOnly}
             value={rule.field}
             size="small"
             options={fieldOptions}
@@ -119,6 +125,7 @@ const CriteriaConditionRowComponent = ({
       {conditionType === 'aggregate' ? (
         <FormField label={t(I18N.sidebar.aggregateFunctionLabel)}>
           <SearchableSelect
+            disabled={readOnly}
             options={aggregateFunctions}
             size="small"
             value={rule.aggregate_function ?? ''}
@@ -132,6 +139,7 @@ const CriteriaConditionRowComponent = ({
 
       <FormField label={t(I18N.sidebar.operatorLabel)}>
         <SearchableSelect
+          disabled={readOnly}
           options={applicableOperators}
           size="small"
           value={rule.operator}
@@ -144,6 +152,7 @@ const CriteriaConditionRowComponent = ({
 
       <FormField label={t(I18N.sidebar.valueLabel)}>
         <ConditionValueInput
+          disabled={readOnly}
           // Remount on a field change: the value editor switches between a text
           // box, an enum select and a lookup depending on the field's type.
           key={rule.field}

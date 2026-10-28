@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Box, FormControlLabel } from '@mui/material';
-import { AddIcon } from '../../../ui/icons';
+import { Box, FormControlLabel, IconButton } from '@mui/material';
+import { AddIcon, ArrowDownwardIcon, ArrowUpwardIcon } from '../../../ui/icons';
 import {
   ActionIcon,
   Button,
@@ -17,6 +17,7 @@ import {
   TEXT_SUBTLE,
   outlinedBorderSx,
 } from '../../../ui/tokens';
+import { moveItem } from '../../../utils/array';
 import { FormField } from '../../layout';
 import { SidebarShell } from './SidebarShell';
 import { NumberedCard } from './NumberedCard';
@@ -54,6 +55,8 @@ export interface ActionSidebarProps {
   module: string;
   /** Company/location scope, used to filter department, user and level lookups. */
   scope: WorkflowScope;
+  /** Show the saved stages without editing: no save, add or remove. */
+  readOnly?: boolean;
 }
 
 /**
@@ -82,6 +85,7 @@ export const ActionSidebar = ({
   onSave,
   module,
   scope,
+  readOnly = false,
 }: ActionSidebarProps) => {
   const t = useTranslate();
   const permissions = useApprovalPermissions();
@@ -155,6 +159,12 @@ export const ActionSidebar = ({
     );
   }, []);
 
+  // Stage order is approval order: the engine runs them one after another in
+  // this sequence, so moving one changes who approves first.
+  const moveStage = useCallback((index: number, to: number) => {
+    setStages((previous) => moveItem(previous, index, to));
+  }, []);
+
   const isValid = useMemo(
     () => Boolean(title.trim()) && stages.some(isStageComplete),
     [title, stages],
@@ -182,7 +192,7 @@ export const ActionSidebar = ({
     <SidebarShell
       isOpen={isOpen}
       onClose={onClose}
-      onSave={handleSave}
+      onSave={readOnly ? undefined : handleSave}
       title={t(I18N.sidebar.actionTitle)}
       subtitle={t(I18N.sidebar.actionSubtitle)}
       icon={<ActionIcon fontSize="small" />}
@@ -190,7 +200,7 @@ export const ActionSidebar = ({
       iconColor="theme.primary.1000"
       saveDisabled={!isValid}
       saveLabel={t(I18N.sidebar.saveAndAdd)}
-      cancelLabel={t(I18N.common.cancel)}
+      cancelLabel={t(readOnly ? I18N.node.detailsClose : I18N.common.cancel)}
       badge={
         branchPresentation ? (
           <Box
@@ -213,6 +223,7 @@ export const ActionSidebar = ({
       <FormField label={t(I18N.sidebar.actionName)} required htmlFor="action-title">
         <TextField
           id="action-title"
+          disabled={readOnly}
           size="small"
           fullWidth
           value={title}
@@ -249,11 +260,36 @@ export const ActionSidebar = ({
               </Typography>
             </Box>
           }
-          onRemove={stages.length > 1 ? () => removeStage(index) : undefined}
+          actions={
+            stages.length > 1 && !readOnly ? (
+              <>
+                <IconButton
+                  size="small"
+                  aria-label={`${t(I18N.sidebar.moveUp)} ${t(I18N.sidebar.stage)} ${index + 1}`}
+                  disabled={index === 0}
+                  onClick={() => moveStage(index, index - 1)}
+                  sx={{ color: TEXT_SUBTLE }}
+                >
+                  <ArrowUpwardIcon fontSize="small" />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  aria-label={`${t(I18N.sidebar.moveDown)} ${t(I18N.sidebar.stage)} ${index + 1}`}
+                  disabled={index === stages.length - 1}
+                  onClick={() => moveStage(index, index + 1)}
+                  sx={{ color: TEXT_SUBTLE }}
+                >
+                  <ArrowDownwardIcon fontSize="small" />
+                </IconButton>
+              </>
+            ) : undefined
+          }
+          onRemove={stages.length > 1 && !readOnly ? () => removeStage(index) : undefined}
           removeLabel={`${t(I18N.common.delete)} ${t(I18N.sidebar.stage)} ${index + 1}`}
         >
           <FormField label={t(I18N.sidebar.action)}>
             <SearchableSelect
+              disabled={readOnly}
               options={actionTypes}
               size="small"
               value={
@@ -270,6 +306,7 @@ export const ActionSidebar = ({
 
           <FormField label={t(I18N.sidebar.approvalType)}>
             <SearchableSelect
+              disabled={readOnly}
               options={approverTypeOptions}
               size="small"
               value={stage.approver_type}
@@ -284,6 +321,7 @@ export const ActionSidebar = ({
             <>
               <FormField label={t(I18N.sidebar.department)}>
                 <SearchableSelect
+                  disabled={readOnly}
                   apiType="department"
                   size="small"
                   value={stage.department_id}
@@ -297,6 +335,7 @@ export const ActionSidebar = ({
 
               <FormField label={t(I18N.sidebar.designation)}>
                 <SearchableSelect
+                  disabled={readOnly}
                   apiType="designation"
                   size="small"
                   value={stage.designation_id}
@@ -316,6 +355,7 @@ export const ActionSidebar = ({
           {stage.approver_type === 'USER' ? (
             <FormField label={t(I18N.sidebar.users)}>
               <SearchableSelect
+                disabled={readOnly}
                 multiple
                 size="small"
                 {...userSource}
@@ -335,6 +375,7 @@ export const ActionSidebar = ({
           {stage.approver_type === 'HIERARCHY' ? (
             <FormField label={t(I18N.sidebar.level)}>
               <SearchableSelect
+                disabled={readOnly}
                 options={levels}
                 size="small"
                 value={stage.level}
@@ -360,6 +401,7 @@ export const ActionSidebar = ({
               sx={{ ml: 0, mr: 0, alignItems: 'flex-start', gap: 1 }}
               control={
                 <Checkbox
+                  disabled={readOnly}
                   size="small"
                   sx={{ p: 0, mt: 0.125 }}
                   checked={stage.auto_approve_enabled}
@@ -379,6 +421,7 @@ export const ActionSidebar = ({
               <Box display="flex" gap={1.5} pl={3}>
                 <Box flex={1}>
                   <SearchableSelect
+                    disabled={readOnly}
                     options={AUTO_APPROVE_VALUE_OPTIONS}
                     size="small"
                     value={stage.auto_approve_value}
@@ -390,6 +433,7 @@ export const ActionSidebar = ({
                 </Box>
                 <Box flex={1}>
                   <SearchableSelect
+                    disabled={readOnly}
                     options={AUTO_APPROVE_UNIT_OPTIONS}
                     size="small"
                     value={stage.auto_approve_unit}
@@ -405,16 +449,18 @@ export const ActionSidebar = ({
         </NumberedCard>
       ))}
 
-      <Button
-        variant="outlined"
-        size="small"
-        fullWidth
-        startIcon={<AddIcon fontSize="small" />}
-        onClick={addStage}
-        sx={{ py: 1, ...outlinedBorderSx('dashed') }}
-      >
-        {t(I18N.sidebar.addStage)}
-      </Button>
+      {readOnly ? null : (
+        <Button
+          variant="outlined"
+          size="small"
+          fullWidth
+          startIcon={<AddIcon fontSize="small" />}
+          onClick={addStage}
+          sx={{ py: 1, ...outlinedBorderSx('dashed') }}
+        >
+          {t(I18N.sidebar.addStage)}
+        </Button>
+      )}
     </SidebarShell>
   );
 };

@@ -47,11 +47,32 @@ export const WORKFLOW_LIST_COLUMNS: ApprovalTableColumn[] = [
     type: 'custom',
   },
   {
+    accessorKey: WORKFLOW_FIELDS.COMPANY_IDS,
+    header: 'approval-work-flow.columns.applies_to',
+    label: 'Applies To',
+    visible: false,
+    type: 'custom',
+  },
+  {
     accessorKey: WORKFLOW_FIELDS.IS_ACTIVE,
     header: 'approval-work-flow.columns.status',
     label: 'Status',
     visible: true,
     type: 'custom',
+  },
+  {
+    accessorKey: WORKFLOW_FIELDS.STATUS,
+    header: 'approval-work-flow.columns.publish_status',
+    label: 'Publish Status',
+    visible: false,
+    type: 'custom',
+  },
+  {
+    accessorKey: WORKFLOW_FIELDS.UPDATED_AT,
+    header: 'approval-work-flow.columns.last_modified',
+    label: 'Last Modified',
+    visible: false,
+    type: 'datetime',
   },
 ];
 

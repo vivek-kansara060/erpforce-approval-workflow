@@ -2,6 +2,7 @@ import { ENDPOINTS } from './endpoints';
 import type { HttpClient } from '../types/http';
 import type { EntityCatalogueEntry, SelectOption, SelectOptionGroup } from '../types/common';
 import type { OperatorReference } from '../types/criteria';
+import type { DirectoryEmployee, DirectoryUser } from '../utils/approver-directory';
 
 /** Reference item as returned by `/v1/workflow-references/:type`. */
 interface RawReferenceItem {
@@ -52,6 +53,15 @@ export const toEntityFieldGroups = (
     })),
   }));
 
+/** Most rows read from each directory; the picker searches and pages them locally. */
+export const APPROVER_DIRECTORY_LIMIT = 1000;
+
+/** ERP filter string: `(a.eq=1&b.in=2,3)`. Empty arrays stay, matching the select's own lookups. */
+const toFilterString = (filters: Record<string, string | number | Array<string | number>>) =>
+  `(${Object.entries(filters)
+    .map(([key, value]) => `${key}=${Array.isArray(value) ? value.join(',') : value}`)
+    .join('&')})`;
+
 export interface ReferenceApi {
   /** Reference options for a type: `action_type`, `operator`, `logical_operator`, ... */
   byType(
@@ -68,6 +78,13 @@ export interface ReferenceApi {
     scope: { company_ids?: Array<string | number>; location_ids?: Array<string | number> },
     signal?: AbortSignal,
   ): Promise<SelectOption[]>;
+  /** Active users in the given companies. The fallback when employees are not readable. */
+  approverUsers(companyIds: Array<string | number>, signal?: AbortSignal): Promise<DirectoryUser[]>;
+  /** Employees with a linked user account in the given companies. Needs `employee` access. */
+  approverEmployees(
+    companyIds: Array<string | number>,
+    signal?: AbortSignal,
+  ): Promise<DirectoryEmployee[]>;
   /** Generic lookup used to resolve foreign-key criteria values. */
   filterTable(
     params: { table: string; search?: string; limit?: number; offset?: number },
@@ -158,6 +175,40 @@ export const createReferenceApi = (http: HttpClient): ReferenceApi => ({
     });
 
     return (envelope?.data?.all_levels ?? []).map((level) => ({ label: level, value: level }));
+  },
+
+  async approverUsers(companyIds, signal) {
+    const envelope = await http<{ data?: { users?: DirectoryUser[] } }>({
+      service: 'rbac',
+      method: 'GET',
+      path: ENDPOINTS.users,
+      query: {
+        select: '[id,first_name,last_name]',
+        filters: toFilterString({ 'is_active.eq': 1, 'company_id.in': companyIds }),
+        limit: APPROVER_DIRECTORY_LIMIT,
+        skip: 0,
+        order: 'id:-1',
+      },
+      signal,
+    });
+    return envelope?.data?.users ?? [];
+  },
+
+  async approverEmployees(companyIds, signal) {
+    const envelope = await http<{ data?: { employees?: DirectoryEmployee[] } }>({
+      service: 'hrms',
+      method: 'GET',
+      path: ENDPOINTS.employees,
+      query: {
+        select: '[id,user_id,name]',
+        filters: toFilterString({ 'user_id.ne': 'null', 'company_id.in': companyIds }),
+        limit: APPROVER_DIRECTORY_LIMIT,
+        skip: 0,
+        order: 'id:-1',
+      },
+      signal,
+    });
+    return envelope?.data?.employees ?? [];
   },
 
   async filterTable(params, signal) {

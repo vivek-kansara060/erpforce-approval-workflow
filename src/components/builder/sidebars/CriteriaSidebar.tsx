@@ -34,6 +34,8 @@ export interface CriteriaSidebarProps {
   onSave: (nodeId: string, data: CriteriaNodeData, parentNodeId: string) => void;
   /** Entity whose fields are selectable in conditions. */
   entityType: string;
+  /** Show the saved conditions without editing: no save, add or remove. */
+  readOnly?: boolean;
 }
 
 /**
@@ -55,6 +57,7 @@ export const CriteriaSidebar = ({
   onClose,
   onSave,
   entityType,
+  readOnly = false,
 }: CriteriaSidebarProps) => {
   const t = useTranslate();
 
@@ -201,6 +204,7 @@ export const CriteriaSidebar = ({
               >
                 <Box width={104}>
                   <SearchableSelect
+                    disabled={readOnly}
                     options={logicalOperators}
                     size="small"
                     showCancelButton={false}
@@ -224,20 +228,23 @@ export const CriteriaSidebar = ({
               onConditionTypeChange={changeConditionType}
               onRemove={removeCondition}
               canRemove={query.rules.length > 1}
+              readOnly={readOnly}
             />
           </Box>
         ))}
 
-        <Button
-          variant="outlined"
-          size="small"
-          fullWidth
-          startIcon={<AddIcon fontSize="small" />}
-          onClick={addCondition}
-          sx={{ py: 1, ...outlinedBorderSx('dashed') }}
-        >
-          {t(I18N.sidebar.criteriaAdd)}
-        </Button>
+        {readOnly ? null : (
+          <Button
+            variant="outlined"
+            size="small"
+            fullWidth
+            startIcon={<AddIcon fontSize="small" />}
+            onClick={addCondition}
+            sx={{ py: 1, ...outlinedBorderSx('dashed') }}
+          >
+            {t(I18N.sidebar.criteriaAdd)}
+          </Button>
+        )}
       </>
     );
   };
@@ -246,17 +253,18 @@ export const CriteriaSidebar = ({
     <SidebarShell
       isOpen={isOpen}
       onClose={onClose}
-      onSave={handleSave}
+      onSave={readOnly ? undefined : handleSave}
       title={t(I18N.sidebar.criteriaTitle)}
       subtitle={t(I18N.sidebar.criteriaSubtitle)}
       icon={<CriteriaIcon fontSize="small" />}
       saveDisabled={!isValid || isFieldCatalogueLoading || Boolean(fieldCatalogueError)}
       saveLabel={t(I18N.common.save)}
-      cancelLabel={t(I18N.common.cancel)}
+      cancelLabel={t(readOnly ? I18N.node.detailsClose : I18N.common.cancel)}
     >
       <FormField label={t(I18N.sidebar.criteriaName)} required htmlFor="criteria-title">
         <TextField
           id="criteria-title"
+          disabled={readOnly}
           size="small"
           fullWidth
           value={title}

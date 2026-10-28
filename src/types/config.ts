@@ -61,7 +61,13 @@ export type ApprovalErrorContext =
   /** A write failed. */
   | {
       source: 'mutation';
-      operation: 'workflow.save' | 'workflow.remove' | 'approval.decision' | 'approval.preAction';
+      operation:
+        | 'workflow.save'
+        | 'workflow.remove'
+        | 'workflow.toggle'
+        | 'workflow.simulate'
+        | 'approval.decision'
+        | 'approval.preAction';
     };
 
 /**

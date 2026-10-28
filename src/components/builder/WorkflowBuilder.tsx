@@ -1,18 +1,20 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Box } from '@mui/material';
 import {
   Background,
   BackgroundVariant,
+  MiniMap,
   ReactFlow,
   ReactFlowProvider,
 } from '@xyflow/react';
 import type { NodeChange, Viewport } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import { ConfirmModal } from '../../ui';
-import { BORDER, SURFACE } from '../../ui/tokens';
+import { ActionIcon, Button, ConfirmModal, CriteriaIcon, Typography } from '../../ui';
+import { BORDER, SURFACE, TEXT_SUBTLE } from '../../ui/tokens';
 import { PageHeader } from '../layout';
 import { ZoomControls } from './ZoomControls';
+import { HistoryControls } from './HistoryControls';
 import { ScopeFilterBar } from './ScopeFilterBar';
 import { useAvailableHeight } from './useAvailableHeight';
 import { useNodeTypes } from './nodes/nodeTypes';
@@ -20,6 +22,7 @@ import { EDGE_TYPES } from './edges/BranchEdge';
 import { applyTrackedNodeChanges, toFlowEdge } from './flow-types';
 import { useFlowNodes } from './useFlowNodes';
 import type { NodeCallbacks } from './flow-types';
+import { TestRunDrawer } from './sidebars/TestRunDrawer';
 import { TriggerSidebar } from './sidebars/TriggerSidebar';
 import { CriteriaSidebar } from './sidebars/CriteriaSidebar';
 import { ActionSidebar } from './sidebars/ActionSidebar';
@@ -73,6 +76,32 @@ export interface WorkflowBuilderProps {
   showHeader?: boolean;
 }
 
+const EMPTY_GRAPH: WorkflowGraph = { nodes: [], edges: [] };
+
+/** More blocks than this and the overview map is shown. */
+const MINIMAP_MIN_NODES = 8;
+
+/** Test run is built but switched off for now; flip to bring the button and drawer back. */
+const SHOW_TEST_RUN = false;
+
+const minimapNodeColor = (node: { data?: Record<string, unknown>; type?: string }) => {
+  const result = node.data?.resultType ?? node.data?.type;
+  if (result === 'fail') return FLOW_COLORS.fail;
+  if (result === 'pass') return FLOW_COLORS.pass;
+  return FLOW_COLORS.neutralHandle;
+};
+
+/** One line of the canvas key: the pass and fail colours, then what they mean. */
+const Legend = ({ text }: { text: string }) => (
+  <Box display="flex" alignItems="center" gap={0.75}>
+    <Box aria-hidden sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: FLOW_COLORS.pass }} />
+    <Box aria-hidden sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: FLOW_COLORS.fail }} />
+    <Typography type="s5" color={TEXT_SUBTLE}>
+      {text}
+    </Typography>
+  </Box>
+);
+
 const BuilderCanvas = ({
   initialGraph,
   onChange,
@@ -116,7 +145,20 @@ const BuilderCanvas = ({
     openSidebarForNode,
     openCriteriaSidebar,
     openActionSidebar,
+    duplicateNode,
+    undo,
+    redo,
   } = graph;
+  const isSidebarOpen = graph.sidebar.isOpen;
+  const [isTestRunOpen, setIsTestRunOpen] = useState(false);
+  const openTestRun = useCallback(() => setIsTestRunOpen(true), []);
+  const closeTestRun = useCallback(() => setIsTestRunOpen(false), []);
+  // While the drawer is shut it gets one stable, empty graph, so dragging a node
+  // does not re-render it; it is handed the live graph only once it opens.
+  const testRunGraph = useMemo(
+    () => (isTestRunOpen ? { nodes: graph.nodes, edges: graph.edges } : EMPTY_GRAPH),
+    [isTestRunOpen, graph.nodes, graph.edges],
+  );
 
   const handleDelete = useCallback(
     (nodeId: string) => {
@@ -127,22 +169,63 @@ const BuilderCanvas = ({
     [requestDelete, notify, t],
   );
 
+  const handleDuplicate = useCallback(
+    (nodeId: string) => {
+      duplicateNode(nodeId, t(I18N.node.copySuffix));
+      notify(t(I18N.node.duplicated), 'success');
+    },
+    [duplicateNode, notify, t],
+  );
+
   // Stable callback bundle: a new object here would re-create every node's data
   // and force React Flow to re-render the whole canvas on each parent render.
-  const callbacks = useMemo<NodeCallbacks | null>(
+  // A view-only canvas still lets a node be opened to inspect it; it just gets
+  // no toolbar, and `draggable` is switched off below.
+  const callbacks = useMemo<Partial<NodeCallbacks>>(
     () =>
       readOnly
-        ? null
+        ? { onEdit: openSidebarForNode }
         : {
             onEdit: openSidebarForNode,
             onDelete: handleDelete,
             onAddCriteria: openCriteriaSidebar,
             onAddAction: openActionSidebar,
+            onDuplicate: handleDuplicate,
           },
-    [readOnly, openSidebarForNode, openCriteriaSidebar, openActionSidebar, handleDelete],
+    [
+      readOnly,
+      openSidebarForNode,
+      openCriteriaSidebar,
+      openActionSidebar,
+      handleDelete,
+      handleDuplicate,
+    ],
   );
 
-  const flowNodes = useFlowNodes(graph.nodes, callbacks);
+  // Ctrl/Cmd+Z and Ctrl+Shift+Z / Ctrl+Y. Ignored while typing in a field or
+  // while a drawer is open, so it never steals the browser's own text undo.
+  useEffect(() => {
+    if (readOnly) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || isSidebarOpen) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+
+      const key = event.key.toLowerCase();
+      if (key === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) redo();
+        else undo();
+      } else if (key === 'y') {
+        event.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [readOnly, isSidebarOpen, undo, redo]);
+
+  const flowNodes = useFlowNodes(graph.nodes, callbacks, !readOnly);
 
   const flowEdges = useMemo(() => graph.edges.map(toFlowEdge), [graph.edges]);
 
@@ -163,6 +246,15 @@ const BuilderCanvas = ({
     (_event: unknown, node: { id: string; position: { x: number; y: number } }) =>
       moveNode(node.id, node.position),
     [moveNode],
+  );
+
+  // React Flow switches pointer events off on every node of a canvas where
+  // nothing is selectable or draggable, so a view-only canvas never received the
+  // click that opens a block. Registering a node click handler turns them back
+  // on.
+  const handleNodeClick = useCallback(
+    (_event: unknown, node: { id: string }) => openSidebarForNode(node.id),
+    [openSidebarForNode],
   );
 
   const handleMoveEnd = useCallback(
@@ -236,6 +328,7 @@ const BuilderCanvas = ({
           edgeTypes={EDGE_TYPES}
           onNodesChange={readOnly ? undefined : handleNodesChange}
           onNodeDragStop={readOnly ? undefined : handleNodeDragStop}
+          onNodeClick={readOnly ? handleNodeClick : undefined}
           onMoveEnd={handleMoveEnd}
           nodesDraggable={!readOnly}
           nodesConnectable={false}
@@ -266,6 +359,17 @@ const BuilderCanvas = ({
           // node behind the drawer.
           deleteKeyCode={graph.sidebar.isOpen || readOnly ? [] : ['Backspace', 'Delete']}
         >
+          {/* Only worth the pixels once the flow outgrows one screen. */}
+          {graph.nodes.length > MINIMAP_MIN_NODES ? (
+            <MiniMap
+              pannable
+              zoomable
+              position="top-right"
+              style={{ marginTop: 64 }}
+              nodeColor={minimapNodeColor}
+              maskColor="rgba(31, 33, 37, 0.06)"
+            />
+          ) : null}
           <Background
             variant={BackgroundVariant.Dots}
             gap={20}
@@ -275,60 +379,147 @@ const BuilderCanvas = ({
           />
         </ReactFlow>
 
+        {!readOnly && graph.nodes.length === 1 ? (
+          <Box
+            position="absolute"
+            top={12}
+            left={16}
+            zIndex={4}
+            display="flex"
+            alignItems="center"
+            gap={1.5}
+            flexWrap="wrap"
+            maxWidth="calc(100% - 96px)"
+          >
+            <Typography type="s5" color={TEXT_SUBTLE}>
+              {t(I18N.node.startHint)}
+            </Typography>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<CriteriaIcon fontSize="small" />}
+              onClick={() => openCriteriaSidebar(graph.nodes[0].id)}
+            >
+              {t(I18N.node.addCriteria)}
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<ActionIcon fontSize="small" />}
+              onClick={() => openActionSidebar(graph.nodes[0].id)}
+            >
+              {t(I18N.node.addAction)}
+            </Button>
+          </Box>
+        ) : null}
+
+        {readOnly ? (
+          <Box position="absolute" top={12} left={16} zIndex={4}>
+            <Typography type="s5" color={TEXT_SUBTLE}>
+              {t(I18N.node.viewHint)}
+            </Typography>
+          </Box>
+        ) : null}
+
+        <Box position="absolute" top={12} right={16} zIndex={4} display="flex" gap={1}>
+          {SHOW_TEST_RUN ? (
+            <Button variant="outlined" size="small" onClick={openTestRun}>
+              {t(I18N.node.testRun)}
+            </Button>
+          ) : null}
+          {readOnly ? null : (
+            <HistoryControls
+              canUndo={graph.canUndo}
+              canRedo={graph.canRedo}
+              onUndo={undo}
+              onRedo={redo}
+              undoLabel={t(I18N.node.undo)}
+              redoLabel={t(I18N.node.redo)}
+            />
+          )}
+        </Box>
+
+        {graph.nodes.length > 1 ? (
+          <Box
+            position="absolute"
+            bottom={24}
+            left={16}
+            zIndex={4}
+            display="flex"
+            flexDirection="column"
+            gap={0.5}
+          >
+            {graph.nodes.some((node) => node.type === 'criteria') ? (
+              <Legend text={t(I18N.node.legendCriteria)} />
+            ) : null}
+            {graph.nodes.some((node) => node.type === 'action') ? (
+              <Legend text={t(I18N.node.legendAction)} />
+            ) : null}
+          </Box>
+        ) : null}
+
         <Box position="absolute" bottom={24} right={16} zIndex={4}>
           <ZoomControls />
         </Box>
       </Box>
 
-      {!readOnly ? (
-        <>
-          <TriggerSidebar
-            isOpen={graph.sidebar.isOpen && graph.sidebar.kind === 'trigger'}
-            nodeId={graph.sidebar.nodeId}
-            nodeData={graph.activeNodeData as TriggerNodeData | null}
-            onClose={graph.closeSidebar}
-            onSave={handleSaveTrigger}
-            entityType={entityType}
-            module={moduleContext.module}
-          />
-
-          <CriteriaSidebar
-            isOpen={graph.sidebar.isOpen && graph.sidebar.kind === 'criteria'}
-            nodeId={graph.sidebar.nodeId}
-            parentNodeId={graph.sidebar.parentNodeId}
-            nodeData={graph.activeNodeData as CriteriaNodeData | null}
-            onClose={graph.closeSidebar}
-            onSave={handleSaveCriteria}
-            entityType={entityType}
-          />
-
-          <ActionSidebar
-            isOpen={graph.sidebar.isOpen && graph.sidebar.kind === 'action'}
-            nodeId={graph.sidebar.nodeId}
-            parentNodeId={graph.sidebar.parentNodeId}
-            /**
-             * Either a dedicated action node or a Pass/Fail branch — the
-             * sidebar edits both, and a branch carries `action` alongside its
-             * `resultType`. Casting to `ActionNodeData` alone hid that.
-             */
-            nodeData={
-              graph.activeNodeData as (ActionNodeData & Partial<ResultNodeData>) | null
-            }
-            onClose={graph.closeSidebar}
-            onSave={handleSaveAction}
-            module={moduleContext.module}
-            scope={scope}
-          />
-
-          <ConfirmModal
-            open={Boolean(graph.pendingDeleteId)}
-            onClose={graph.cancelDelete}
-            onConfirm={handleConfirmDelete}
-            title={t(I18N.common.delete)}
-            description={t(I18N.common.deleteMessage)}
-          />
-        </>
+      {SHOW_TEST_RUN ? (
+        <TestRunDrawer
+          isOpen={isTestRunOpen}
+          onClose={closeTestRun}
+          graph={testRunGraph}
+          entityType={entityType}
+        />
       ) : null}
+
+      <TriggerSidebar
+        isOpen={graph.sidebar.isOpen && graph.sidebar.kind === 'trigger'}
+        nodeId={graph.sidebar.nodeId}
+        nodeData={graph.activeNodeData as TriggerNodeData | null}
+        onClose={graph.closeSidebar}
+        onSave={handleSaveTrigger}
+        entityType={entityType}
+        module={moduleContext.module}
+        readOnly={readOnly}
+      />
+
+      <CriteriaSidebar
+        isOpen={graph.sidebar.isOpen && graph.sidebar.kind === 'criteria'}
+        nodeId={graph.sidebar.nodeId}
+        parentNodeId={graph.sidebar.parentNodeId}
+        nodeData={graph.activeNodeData as CriteriaNodeData | null}
+        onClose={graph.closeSidebar}
+        onSave={handleSaveCriteria}
+        entityType={entityType}
+        readOnly={readOnly}
+      />
+
+      <ActionSidebar
+        isOpen={graph.sidebar.isOpen && graph.sidebar.kind === 'action'}
+        nodeId={graph.sidebar.nodeId}
+        parentNodeId={graph.sidebar.parentNodeId}
+        /**
+         * Either a dedicated action node or a Pass/Fail branch — the
+         * sidebar edits both, and a branch carries `action` alongside its
+         * `resultType`. Casting to `ActionNodeData` alone hid that.
+         */
+        nodeData={graph.activeNodeData as (ActionNodeData & Partial<ResultNodeData>) | null}
+        onClose={graph.closeSidebar}
+        onSave={handleSaveAction}
+        module={moduleContext.module}
+        scope={scope}
+        readOnly={readOnly}
+      />
+
+      {readOnly ? null : (
+        <ConfirmModal
+          open={Boolean(graph.pendingDeleteId)}
+          onClose={graph.cancelDelete}
+          onConfirm={handleConfirmDelete}
+          title={t(I18N.common.delete)}
+          description={t(I18N.common.deleteMessage)}
+        />
+      )}
     </Box>
   );
 };

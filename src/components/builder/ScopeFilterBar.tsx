@@ -16,6 +16,11 @@ export interface ScopeFilterBarProps {
   filters?: ScopeFilterDefinition[];
   disabled?: boolean;
   label?: string;
+  /**
+   * Render only the filters that hold a selection. For a read-only summary: an
+   * unused filter is noise, and each one mounted costs a lookup request.
+   */
+  onlySelected?: boolean;
 }
 
 /**
@@ -59,13 +64,16 @@ export const ScopeFilterBar = ({
   filters = DEFAULT_SCOPE_FILTERS,
   disabled = false,
   label = 'Applicable filter',
+  onlySelected = false,
 }: ScopeFilterBarProps) => {
   const permissions = useApprovalPermissions();
 
-  const visibleFilters = useMemo(
-    () => selectApplicableFilters(filters, permissions),
-    [filters, permissions],
-  );
+  const visibleFilters = useMemo(() => {
+    const applicable = selectApplicableFilters(filters, permissions);
+    return onlySelected
+      ? applicable.filter((filter) => (scope[filter.valueKey] ?? []).length > 0)
+      : applicable;
+  }, [filters, permissions, onlySelected, scope]);
 
   const handleChange = useCallback(
     (key: keyof WorkflowScope, value: Array<string | number>) => onChange(key, value ?? []),

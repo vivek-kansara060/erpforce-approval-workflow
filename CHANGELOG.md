@@ -13,6 +13,39 @@ Anything not listed there is internal and may change in a patch release.
 
 ### Added
 
+- **Approver picker merges users and employees.** With `employee` access both
+  directories are read and combined on the user id, so each person appears once
+  under their HR name, with the account name in brackets when the two differ;
+  search matches either. Without it only users are read. Both lists load once per
+  company scope (capped at 1000 each) and are searched locally. New `hrms`
+  service name that falls back to `organization`; the saved payload is unchanged.
+- **Workflow screens, refined.**
+  - *List:* Publish Status, Applies To and Last Modified columns; Publish status
+    and Status filters in the default toolbar (applied on the server); a
+    no-results state; Activate / Deactivate row actions (`POST
+    /v1/workflows/:id/toggle`, behind the existing `workflow.activate`
+    permission).
+  - *Form:* the Applicable filter (scope) is a visible, required card;
+    "Publish" / "Update" replaces "Save", with a first-publish confirmation; a
+    Draft / Published chip; an unsaved-changes prompt on Discard and on tab
+    close.
+  - *View:* scope is shown, blocks can be opened read-only (the real sidebars,
+    inputs disabled), and the canvas is re-spaced for display. Stored positions
+    and the payload are untouched.
+  - *Builder:* tighter spacing; a caption and summary under every block;
+    "On approved / On rejected" under an action; a flag on any block that is not
+    fully configured, saying why; undo and redo (Ctrl/Cmd+Z); a start hint with
+    Add criteria / Add action; a Pass/Fail key; move-up / move-down on approval stages (stage order is
+    approval order); an overview minimap once a flow has more than eight blocks.
+  - Summary counts now report approval stages instead of counting the
+    auto-created Pass/Fail blocks.
+  - *Duplicate:* a criteria or action block can be copied, with its branches,
+    from its toolbar.
+  - *Test run:* a "Test run" drawer in the builder tries a sample request against
+    the flow as it stands (saved or not) and shows each criteria's verdict and the
+    approval reached. Needs `POST /v1/workflows/simulate` on the workflow service.
+  - *Change history:* the details page can show who changed a workflow and what.
+    Needs `GET /v1/workflows/:id/history` on the workflow service.
 - **Approval History for any record.** `ApprovalHistory` is a button that opens
   a popover with the record's whole approval trail. A summary card says where it
   stands (status, the level it is waiting at, who it is waiting on, who

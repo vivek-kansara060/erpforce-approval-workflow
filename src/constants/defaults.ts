@@ -44,19 +44,19 @@ export const DEFAULT_APPROVAL_MESSAGES = {
  * Canvas layout geometry.
  *
  * `NODE_WIDTH` and `NODE_HEIGHT` are what a node actually occupies as
- * `GenericNode` renders it — the label box is the widest part at 148px, and the
- * height covers the (always in-flow, merely transparent) hover toolbar, the 96px
- * card and the caption under it. The old 80x50 was neither, which is why the
- * gaps derived from it read as far too wide.
+ * `GenericNode` renders it — the 96px card with its label and subtitle under
+ * it (a long label wraps within the box, so 120px is the working width). The
+ * hover toolbar floats above the card and takes no height. Earlier values
+ * reserved room for it and for a 148px label, which read as far too wide.
  *
  * The two spacings are the *gap* between adjacent nodes, not the stride;
  * `layout-utils` adds the node's own size to get the column and row stride.
  */
 export const LAYOUT = {
-  NODE_WIDTH: 148,
-  NODE_HEIGHT: 170,
-  HORIZONTAL_SPACING: 72,
-  VERTICAL_SPACING: 40,
+  NODE_WIDTH: 120,
+  NODE_HEIGHT: 136,
+  HORIZONTAL_SPACING: 36,
+  VERTICAL_SPACING: 24,
   DEFAULT_MEASURED: { width: 366, height: 55 },
 } as const;
 

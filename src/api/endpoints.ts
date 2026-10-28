@@ -7,6 +7,12 @@
 export const ENDPOINTS = {
   workflows: '/v1/workflows',
   workflowById: (id: string) => `/v1/workflows/${encodeURIComponent(id)}`,
+  /** Who changed a workflow, when, and what. Newest first. */
+  workflowHistory: (id: string) => `/v1/workflows/${encodeURIComponent(id)}/history`,
+  /** Dry run of a graph against a sample record. Stateless: nothing is saved. */
+  workflowSimulate: '/v1/workflows/simulate',
+  /** Flips `is_active`; the server refuses to activate a second live copy. */
+  workflowToggle: (id: string) => `/v1/workflows/${encodeURIComponent(id)}/toggle`,
 
   workflowReferences: '/v1/workflow-references/',
   workflowReferencesByType: (type: string) =>
@@ -28,5 +34,8 @@ export const ENDPOINTS = {
   filterTable: '/v1/filter/filter-table',
 
   userModules: '/v1/user/modules',
+  /** Directory lookups behind the User approver. Trailing slash matches the ERP gateway. */
+  users: '/v1/user/',
+  employees: '/v1/employee/',
   hierarchyLevels: '/v1/organisation-structure/hierarchy-levels',
 } as const;

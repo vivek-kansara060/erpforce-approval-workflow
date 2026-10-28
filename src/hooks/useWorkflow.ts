@@ -8,8 +8,16 @@ import {
   useApprovalWorkflowServices,
 } from '../providers/useApprovalWorkflowConfig';
 import type { ApprovalWorkflowError } from '../types/common';
-import type { Workflow, WorkflowFormValues } from '../types/workflow';
+import type {
+  SimulationResult,
+  Workflow,
+  WorkflowFormValues,
+  WorkflowHistoryEntry,
+} from '../types/workflow';
 import type { SaveWorkflowInput } from '../services/workflow.service';
+import type { SimulateWorkflowInput } from '../api/workflow.api';
+
+const EMPTY_HISTORY: WorkflowHistoryEntry[] = [];
 
 /**
  * A single workflow, plus the form values derived from it.
@@ -47,6 +55,42 @@ export const useWorkflow = (
     error: query.error,
     refetch: query.refetch,
   };
+};
+
+/**
+ * Change history of one workflow, newest first.
+ *
+ * Nothing is requested until `enabled`, so a details page that never opens its
+ * history never pays for it. Any save, toggle or delete invalidates the
+ * `workflow` cache prefix, so reopening after an edit shows the new row.
+ */
+export const useWorkflowHistory = (id: string | undefined, options: { enabled?: boolean } = {}) => {
+  const { workflow } = useApprovalWorkflowServices();
+  const query = useCachedQuery<WorkflowHistoryEntry[]>(
+    queryKeys.workflow.history(id ?? ''),
+    (signal) => workflow.history(id as string, signal),
+    { enabled: Boolean(id) && (options.enabled ?? true) },
+  );
+
+  return { ...query, entries: query.data ?? EMPTY_HISTORY };
+};
+
+/** Test run of a graph against a sample record. Resolves `undefined` on failure. */
+export const useSimulateWorkflow = (onError?: (error: ApprovalWorkflowError) => void) => {
+  const { workflow } = useApprovalWorkflowServices();
+  return useReportedMutation<SimulateWorkflowInput, SimulationResult>(
+    'workflow.simulate',
+    (input) => workflow.simulate(input),
+    { onError },
+  );
+};
+
+/** Activate / deactivate. Resolves the new `is_active`, or `undefined` on failure. */
+export const useToggleWorkflow = (onError?: (error: ApprovalWorkflowError) => void) => {
+  const { workflow } = useApprovalWorkflowServices();
+  return useReportedMutation<string, boolean>('workflow.toggle', (id) => workflow.toggle(id), {
+    onError,
+  });
 };
 
 /**

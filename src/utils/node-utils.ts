@@ -1,8 +1,4 @@
-import {
-  DEFAULT_EDGE_STYLE,
-  FAIL_EDGE_STYLE,
-  PASS_EDGE_STYLE,
-} from '../constants/defaults';
+import { DEFAULT_EDGE_STYLE, FAIL_EDGE_STYLE, PASS_EDGE_STYLE } from '../constants/defaults';
 import { getInitialNodePosition, getLayoutedElements } from './layout-utils';
 import type {
   ActionNodeData,
@@ -89,6 +85,102 @@ export const findDescendantIds = (nodeId: string, edges: WorkflowEdge[]): string
   }
 
   return descendants;
+};
+
+/** Block types that can be copied: the ones a user adds, not Pass/Fail or the trigger. */
+const DUPLICABLE_TYPES: ReadonlySet<PersistedNodeType> = new Set(['criteria', 'action']);
+
+export const isDuplicable = (node: Pick<WorkflowNode, 'type'> | undefined): boolean =>
+  Boolean(node && DUPLICABLE_TYPES.has(node.type));
+
+const cloneData = <T>(data: T): T => JSON.parse(JSON.stringify(data)) as T;
+
+/**
+ * Copies a criteria or action block, with everything beneath it, as a sibling
+ * hanging off the same parent.
+ *
+ * Every node and edge in the copy gets a fresh id and the copy's `parentId`s are
+ * remapped onto it, so the two subtrees share nothing: `data` is deep-copied, so
+ * editing one block's stages never changes the other's. Only the copied block's
+ * label is touched (`labelSuffix` appended), so the pair can be told apart.
+ * Layout is re-run for the whole tree, as it is after any other addition.
+ *
+ * Returns `null` when the node cannot be duplicated (not a criteria or action,
+ * or not connected to a parent).
+ */
+export const duplicateSubtree = (
+  nodeId: string,
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  labelSuffix = ' (copy)',
+): { nodes: WorkflowNode[]; edges: WorkflowEdge[]; rootId: string } | null => {
+  const root = nodes.find((node) => node.id === nodeId);
+  if (!root || !isDuplicable(root)) return null;
+
+  const incoming =
+    edges.find((edge) => edge.target === nodeId && edge.source === root.parentId) ??
+    edges.find((edge) => edge.target === nodeId);
+  if (!incoming) return null;
+
+  const copiedIds = new Set([nodeId, ...findDescendantIds(nodeId, edges)]);
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+
+  const idMap = new Map<string, string>();
+  const pairs: Array<{ original: WorkflowNode; copy: WorkflowNode }> = [];
+  for (const id of copiedIds) {
+    const original = byId.get(id);
+    if (!original) continue;
+    const copy = createNode({
+      type: original.type,
+      data: cloneData(original.data),
+      position: { ...original.position },
+    });
+    idMap.set(id, copy.id);
+    pairs.push({ original, copy });
+  }
+
+  const rootCopyId = idMap.get(nodeId) as string;
+  const remappedNodes: WorkflowNode[] = pairs.map(({ original, copy }) => {
+    if (copy.id !== rootCopyId) {
+      return { ...copy, parentId: idMap.get(original.parentId ?? '') };
+    }
+    // The copied block stays under the original's parent; only its label changes.
+    const label = (copy.data as { label?: string }).label ?? '';
+    return {
+      ...copy,
+      parentId: original.parentId,
+      data: { ...copy.data, label: `${label}${labelSuffix}` } as WorkflowNodeData,
+    };
+  });
+
+  const copiedEdges: WorkflowEdge[] = [
+    // The way in: same parent, same handle and style, new target.
+    createEdge({
+      source: incoming.source,
+      target: rootCopyId,
+      sourceHandle: incoming.sourceHandle ?? undefined,
+      targetHandle: incoming.targetHandle ?? undefined,
+      type: incoming.type,
+      style: incoming.style ? { ...incoming.style } : undefined,
+    }),
+    // Everything inside the subtree, rewired between the copies.
+    ...edges
+      .filter((edge) => copiedIds.has(edge.source) && copiedIds.has(edge.target))
+      .map((edge) =>
+        createEdge({
+          source: idMap.get(edge.source) as string,
+          target: idMap.get(edge.target) as string,
+          sourceHandle: edge.sourceHandle ?? undefined,
+          targetHandle: edge.targetHandle ?? undefined,
+          type: edge.type,
+          style: edge.style ? { ...edge.style } : undefined,
+          label: edge.label,
+        }),
+      ),
+  ];
+
+  const laidOut = getLayoutedElements([...nodes, ...remappedNodes], [...edges, ...copiedEdges]);
+  return { ...laidOut, rootId: rootCopyId };
 };
 
 export const deleteNodeWithChildren = (
@@ -189,9 +281,7 @@ export const updateNodeData = (
   nodes: WorkflowNode[],
 ): WorkflowNode[] =>
   nodes.map((node) =>
-    node.id === nodeId
-      ? ({ ...node, data: { ...node.data, ...patch } } as WorkflowNode)
-      : node,
+    node.id === nodeId ? ({ ...node, data: { ...node.data, ...patch } } as WorkflowNode) : node,
   );
 
 /** Creates the root trigger node for a brand-new workflow. */

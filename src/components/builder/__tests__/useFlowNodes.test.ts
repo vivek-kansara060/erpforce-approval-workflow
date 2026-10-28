@@ -16,6 +16,7 @@ const callbacks: NodeCallbacks = {
   onDelete: vi.fn(),
   onAddCriteria: vi.fn(),
   onAddAction: vi.fn(),
+  onDuplicate: vi.fn(),
 };
 
 describe('useFlowNodes', () => {
@@ -49,5 +50,31 @@ describe('useFlowNodes', () => {
     expect(result.current[0]).not.toBe(before);
     expect(result.current[0].data.onEdit).toBeUndefined();
     expect(result.current[0].draggable).toBe(false);
+  });
+
+  it('tells a branch what type its parent is', () => {
+    const parent: WorkflowNode = {
+      id: 'act',
+      type: 'action',
+      position: { x: 0, y: 0 },
+      data: { label: 'act', action: [] },
+    };
+    const branch: WorkflowNode = {
+      id: 'pass',
+      type: 'actionResult',
+      parentId: 'act',
+      position: { x: 0, y: 0 },
+      data: { label: 'Pass', resultType: 'pass' },
+    };
+    const { result } = renderHook(() => useFlowNodes([parent, branch], callbacks));
+
+    expect(result.current[1].data.parentType).toBe('action');
+    expect(result.current[0].data.parentType).toBeUndefined();
+  });
+
+  it('keeps nodes undraggable on a view-only canvas that can still open them', () => {
+    const { result } = renderHook(() => useFlowNodes([node('a')], { onEdit: vi.fn() }, false));
+    expect(result.current[0].draggable).toBe(false);
+    expect(result.current[0].data.onEdit).toBeTypeOf('function');
   });
 });

@@ -114,5 +114,6 @@ export const buildWorkflowFilter = (filters: WorkflowListFilters): string | unde
   if (filters.module) parts.push(`module.eq=${filters.module}`);
   if (filters.entityType) parts.push(`entity_type.eq=${filters.entityType}`);
   if (filters.isActive !== undefined) parts.push(`is_active.eq=${filters.isActive}`);
+  if (filters.status) parts.push(`status.eq=${filters.status}`);
   return parts.length ? parts.join('&') : undefined;
 };

@@ -4,6 +4,7 @@ import {
   addCriteriaNode,
   createTriggerNode,
   deleteNodeWithChildren,
+  duplicateSubtree,
   findDescendantIds,
   updateNodeData,
 } from '../node-utils';
@@ -130,5 +131,85 @@ describe('updateNodeData', () => {
     updateNodeData(root.id, { label: 'Renamed' }, nodes);
 
     expect(nodes[0].data.label).toBe('Leave');
+  });
+});
+
+describe('duplicateSubtree', () => {
+  const build = () => {
+    const root = trigger();
+    const first = addActionNode(root.id, [root], [], {
+      label: 'Manager approval',
+      action: [{ action_type_ref: { id: 1, value: 'request_approval', label: 'Request Approval' } }],
+    });
+    const action = first.nodes.find((node) => node.type === 'action') as WorkflowNode;
+    return { root, action, ...first };
+  };
+
+  it('copies the block and its Pass/Fail branches as a sibling under the same parent', () => {
+    const { root, action, nodes, edges } = build();
+    const result = duplicateSubtree(action.id, nodes, edges);
+
+    expect(result).not.toBeNull();
+    expect(result?.nodes).toHaveLength(nodes.length + 3);
+
+    const copy = result?.nodes.find((node) => node.id === result.rootId) as WorkflowNode;
+    expect(copy.type).toBe('action');
+    expect(copy.parentId).toBe(root.id);
+    expect(result?.edges.some((edge) => edge.source === root.id && edge.target === copy.id)).toBe(true);
+  });
+
+  it('labels only the copied block, so the pair can be told apart', () => {
+    const { action, nodes, edges } = build();
+    const result = duplicateSubtree(action.id, nodes, edges, ' (copy)');
+    const copy = result?.nodes.find((node) => node.id === result.rootId) as WorkflowNode;
+    const copiedBranches = result?.nodes.filter((node) => node.parentId === copy.id) ?? [];
+
+    expect((copy.data as { label: string }).label).toBe('Manager approval (copy)');
+    expect(copiedBranches.map((node) => (node.data as { label: string }).label).sort()).toEqual([
+      'Fail',
+      'Pass',
+    ]);
+  });
+
+  it('wires the copy to its own branches and keeps the pass/fail handles', () => {
+    const { action, nodes, edges } = build();
+    const result = duplicateSubtree(action.id, nodes, edges);
+    const copyId = result?.rootId as string;
+    const branchIds = new Set(result?.nodes.filter((node) => node.parentId === copyId).map((n) => n.id));
+    const out = result?.edges.filter((edge) => edge.source === copyId) ?? [];
+
+    expect(out).toHaveLength(2);
+    expect(out.every((edge) => branchIds.has(edge.target))).toBe(true);
+    expect(out.map((edge) => edge.sourceHandle).sort()).toEqual(['fail', 'pass']);
+  });
+
+  it('shares nothing with the original: ids are new and data is deep-copied', () => {
+    const { action, nodes, edges } = build();
+    const result = duplicateSubtree(action.id, nodes, edges);
+    const originalIds = new Set(nodes.map((node) => node.id));
+    const added = result?.nodes.filter((node) => !originalIds.has(node.id)) ?? [];
+
+    expect(added).toHaveLength(3);
+    const copy = result?.nodes.find((node) => node.id === result.rootId) as WorkflowNode;
+    expect((copy.data as { action: unknown[] }).action).not.toBe(
+      (action.data as { action: unknown[] }).action,
+    );
+    expect(new Set(result?.nodes.map((node) => node.id)).size).toBe(result?.nodes.length);
+  });
+
+  it('leaves the original graph untouched', () => {
+    const { action, nodes, edges } = build();
+    const before = JSON.stringify({ nodes, edges });
+    duplicateSubtree(action.id, nodes, edges);
+    expect(JSON.stringify({ nodes, edges })).toBe(before);
+  });
+
+  it('refuses the trigger, a Pass/Fail branch and an unknown id', () => {
+    const { root, nodes, edges } = build();
+    const branch = nodes.find((node) => node.type === 'actionResult') as WorkflowNode;
+
+    expect(duplicateSubtree(root.id, nodes, edges)).toBeNull();
+    expect(duplicateSubtree(branch.id, nodes, edges)).toBeNull();
+    expect(duplicateSubtree('missing', nodes, edges)).toBeNull();
   });
 });

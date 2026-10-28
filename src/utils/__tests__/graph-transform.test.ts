@@ -208,13 +208,43 @@ describe('validateGraph', () => {
 });
 
 describe('summarizeGraph', () => {
-  it('counts each node category', () => {
+  it('does not count the auto-created Pass/Fail branches as actions', () => {
     expect(summarizeGraph(graphWithCriteria())).toEqual({
       triggers: 1,
       criteria: 1,
-      actions: 2,
+      actions: 0,
       total: 4,
     });
+  });
+
+  it('counts the stages configured on actions and branches', () => {
+    const stage = { action_type_ref: null } as ApproverStage;
+    const graph = graphWithCriteria();
+    graph.nodes[2].data = { label: 'Pass', resultType: 'pass', action: [stage, stage] };
+    graph.nodes.push({
+      id: 'action-1',
+      type: 'action',
+      position: { x: 0, y: 0 },
+      parentId: 'trigger-1',
+      data: { label: 'Direct', action: [stage] },
+    });
+
+    expect(summarizeGraph(graph).actions).toBe(3);
+  });
+
+  it('counts an action node with no stages yet as one', () => {
+    const graph: WorkflowGraph = {
+      nodes: [
+        {
+          id: 'action-1',
+          type: 'action',
+          position: { x: 0, y: 0 },
+          data: { label: 'Direct', action: [] },
+        },
+      ],
+      edges: [],
+    };
+    expect(summarizeGraph(graph).actions).toBe(1);
   });
 
   it('handles a missing graph', () => {

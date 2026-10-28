@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { usePagedList } from './internal/usePagedList';
-import { useRemoveWorkflow } from './useWorkflow';
+import { useRemoveWorkflow, useToggleWorkflow } from './useWorkflow';
 import { queryKeys } from '../constants/query-keys';
 import { WORKFLOW_LIST_COLUMNS } from '../constants/columns';
 import { WORKFLOW_REQUIRED_SELECT_FIELDS } from '../constants/fields';
@@ -19,6 +19,8 @@ export interface UseWorkflowListOptions {
   resource?: string;
   /** Called when `deleteWorkflow` fails, after `config.onError`. */
   onDeleteError?: (error: ApprovalWorkflowError) => void;
+  /** Called when `toggleWorkflow` fails, e.g. a duplicate live workflow. */
+  onToggleError?: (error: ApprovalWorkflowError) => void;
 }
 
 /**
@@ -29,7 +31,11 @@ export interface UseWorkflowListOptions {
  * back is served from cache and a re-render never refetches.
  */
 export const useWorkflowList = (options: UseWorkflowListOptions = {}) => {
-  const { filters, scopeToModule = true, resource = 'approval-workflow', onDeleteError } = options;
+  const { filters, scopeToModule = true,
+    resource = 'approval-workflow',
+    onDeleteError,
+    onToggleError,
+  } = options;
 
   const { workflow } = useApprovalWorkflowServices();
   const { moduleContext } = useApprovalWorkflowConfig();
@@ -53,10 +59,13 @@ export const useWorkflowList = (options: UseWorkflowListOptions = {}) => {
   });
 
   const remove = useRemoveWorkflow(onDeleteError);
+  const toggle = useToggleWorkflow(onToggleError);
 
   return {
     ...list,
     deleteWorkflow: remove.mutate,
     isDeleting: remove.isLoading,
+    toggleWorkflow: toggle.mutate,
+    isToggling: toggle.isLoading,
   };
 };

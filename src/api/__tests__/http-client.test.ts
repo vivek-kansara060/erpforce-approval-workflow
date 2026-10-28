@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildQueryString, createFetchHttpClient, normalizeHttpError } from '../http-client';
+import {
+  buildQueryString,
+  createFetchHttpClient,
+  normalizeHttpError,
+  resolveBaseUrl,
+} from '../http-client';
 import { createWorkflowApi } from '../workflow.api';
 import { createApprovalApi } from '../approval.api';
 import { ApprovalWorkflowError } from '../../types/common';
@@ -17,6 +22,22 @@ describe('buildQueryString', () => {
   it('returns an empty string when there is nothing to send', () => {
     expect(buildQueryString(undefined)).toBe('');
     expect(buildQueryString({})).toBe('');
+  });
+});
+
+describe('resolveBaseUrl', () => {
+  const base = { default: 'https://gw', organization: 'https://gw/hrms/' };
+
+  it('sends hrms to the organization base when it has no entry of its own', () => {
+    expect(resolveBaseUrl(base, 'hrms')).toBe('https://gw/hrms');
+  });
+
+  it('prefers an explicit hrms entry', () => {
+    expect(resolveBaseUrl({ ...base, hrms: 'https://hr' }, 'hrms')).toBe('https://hr');
+  });
+
+  it('falls back to default for everything else', () => {
+    expect(resolveBaseUrl(base, 'rbac')).toBe('https://gw');
   });
 });
 

@@ -15,22 +15,28 @@ import type { WorkflowNode } from '../../types/graph';
  */
 export const useFlowNodes = (
   nodes: WorkflowNode[],
-  callbacks: NodeCallbacks | null,
+  callbacks: Partial<NodeCallbacks> | null,
+  draggable?: boolean,
 ): FlowNode[] => {
-  const cacheRef = useRef({ callbacks, byNode: new WeakMap<WorkflowNode, FlowNode>() });
+  const cacheRef = useRef<{ callbacks: Partial<NodeCallbacks> | null; byNode: WeakMap<WorkflowNode, FlowNode> }>({ callbacks, byNode: new WeakMap() });
 
   return useMemo(() => {
     if (cacheRef.current.callbacks !== callbacks) {
       cacheRef.current = { callbacks, byNode: new WeakMap() };
     }
     const { byNode } = cacheRef.current;
+    // One lookup table per graph change; a node's parent type never changes.
+    const typeById = new Map(nodes.map((node) => [node.id, node.type]));
 
     return nodes.map((node) => {
       const cached = byNode.get(node);
       if (cached) return cached;
-      const flowNode = toFlowNode(node, callbacks);
+      const flowNode = toFlowNode(node, callbacks, {
+        parentType: node.parentId ? typeById.get(node.parentId) : undefined,
+        draggable,
+      });
       byNode.set(node, flowNode);
       return flowNode;
     });
-  }, [nodes, callbacks]);
+  }, [nodes, callbacks, draggable]);
 };

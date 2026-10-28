@@ -16,6 +16,8 @@ export interface TriggerSidebarProps {
   /** Entity the workflow is bound to, from the form. */
   entityType: string;
   module: string;
+  /** Show the saved trigger without editing. */
+  readOnly?: boolean;
 }
 
 /**
@@ -32,6 +34,7 @@ export const TriggerSidebar = ({
   onSave,
   entityType,
   module,
+  readOnly = false,
 }: TriggerSidebarProps) => {
   const t = useTranslate();
   // Keep the saved trigger selectable even if its entity was disabled since.
@@ -60,16 +63,17 @@ export const TriggerSidebar = ({
     <SidebarShell
       isOpen={isOpen}
       onClose={onClose}
-      onSave={handleSave}
+      onSave={readOnly ? undefined : handleSave}
       title={t(I18N.sidebar.triggerTitle)}
       subtitle={t(I18N.sidebar.triggerSubtitle)}
       icon={<ShareIcon fontSize="small" />}
       saveDisabled={!selected}
       saveLabel={t(I18N.common.save)}
-      cancelLabel={t(I18N.common.cancel)}
+      cancelLabel={t(readOnly ? I18N.node.detailsClose : I18N.common.cancel)}
     >
       <FormField label={t(I18N.sidebar.triggerTitle)} required>
         <SearchableSelect
+          disabled={readOnly}
           options={catalogue}
           size="small"
           value={selected}

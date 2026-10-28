@@ -7,7 +7,8 @@ import { BORDER, RADIUS, SURFACE, TEXT_STRONG, TEXT_SUBTLE } from '../../../ui/t
 export interface SidebarShellProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: () => void;
+  /** Omit for a read-only drawer: the footer then offers only the close button. */
+  onSave?: () => void;
   title: string;
   /** One line under the title explaining what the drawer configures. */
   subtitle?: string;
@@ -159,6 +160,11 @@ export const SidebarShell = ({
         display: 'flex',
         flexDirection: 'column',
         gap: 2.5,
+        // The body is a flex column with a fixed height, so without this its
+        // children shrink to fit instead of overflowing. Cards with
+        // `overflow: hidden` (a stage, a condition) then get squashed and clip
+        // their own fields, rather than the body scrolling.
+        '& > *': { flexShrink: 0 },
       }}
     >
       {badge}
@@ -181,9 +187,11 @@ export const SidebarShell = ({
       <Button variant="outlined" onClick={onClose}>
         {cancelLabel}
       </Button>
-      <Button variant="contained" onClick={onSave} disabled={saveDisabled}>
-        {saveLabel}
-      </Button>
+      {onSave ? (
+        <Button variant="contained" onClick={onSave} disabled={saveDisabled}>
+          {saveLabel}
+        </Button>
+      ) : null}
     </Box>
   </Drawer>
 );

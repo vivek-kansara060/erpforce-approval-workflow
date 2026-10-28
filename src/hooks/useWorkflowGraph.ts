@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { getLayoutedElements } from '../utils/layout-utils';
 import {
   addActionNode,
   addCriteriaNode,
   createTriggerNode,
   deleteNodeWithChildren,
+  duplicateSubtree,
   updateNodeData,
 } from '../utils/node-utils';
 import type {
@@ -15,6 +17,14 @@ import type {
   WorkflowNode,
   WorkflowNodeData,
 } from '../types/graph';
+
+/** How many edits can be stepped back through; older ones are dropped. */
+const MAX_HISTORY = 50;
+
+interface GraphSnapshot {
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+}
 
 export type SidebarKind = 'trigger' | 'criteria' | 'action';
 
@@ -86,13 +96,37 @@ export const useWorkflowGraph = (options: UseWorkflowGraphOptions) => {
     });
   }, []);
 
+  /**
+   * Undo / redo.
+   *
+   * The graph is immutable, so a snapshot is just the two array references —
+   * no copying. Only the counts live in state, so the buttons can enable and
+   * disable; the stacks themselves are a ref and cost no render.
+   */
+  const historyRef = useRef<{ past: GraphSnapshot[]; future: GraphSnapshot[] }>({
+    past: [],
+    future: [],
+  });
+  const [historyDepth, setHistoryDepth] = useState({ past: 0, future: 0 });
+  const syncHistoryDepth = useCallback(() => {
+    const { past, future } = historyRef.current;
+    setHistoryDepth({ past: past.length, future: future.length });
+  }, []);
+
   const commit = useCallback(
-    (nextNodes: WorkflowNode[], nextEdges: WorkflowEdge[]) => {
+    (nextNodes: WorkflowNode[], nextEdges: WorkflowEdge[], record = true) => {
+      if (record) {
+        const history = historyRef.current;
+        history.past.push(graphRef.current);
+        if (history.past.length > MAX_HISTORY) history.past.shift();
+        history.future = [];
+        syncHistoryDepth();
+      }
       setNodes(nextNodes);
       setEdges(nextEdges);
       emit(nextNodes, nextEdges);
     },
-    [emit],
+    [emit, syncHistoryDepth],
   );
 
   /**
@@ -106,8 +140,14 @@ export const useWorkflowGraph = (options: UseWorkflowGraphOptions) => {
     initializedRef.current = true;
 
     if (initialGraph?.nodes?.length) {
-      setNodes(initialGraph.nodes);
-      setEdges(initialGraph.edges ?? []);
+      // A view-only canvas is re-tidied to the current spacing. It is display
+      // only — nothing is saved from here — so the stored positions, and the
+      // payload, are left as they are.
+      const seeded = readOnly
+        ? getLayoutedElements(initialGraph.nodes, initialGraph.edges ?? [])
+        : initialGraph;
+      setNodes(seeded.nodes);
+      setEdges(seeded.edges ?? []);
       if (initialGraph.viewport) viewportRef.current = initialGraph.viewport;
       return;
     }
@@ -184,6 +224,26 @@ export const useWorkflowGraph = (options: UseWorkflowGraphOptions) => {
     [commit, closeSidebar],
   );
 
+  const stepHistory = useCallback(
+    (from: 'past' | 'future') => {
+      const history = historyRef.current;
+      const target = history[from].pop();
+      if (!target) return;
+
+      history[from === 'past' ? 'future' : 'past'].push(graphRef.current);
+      setNodes(target.nodes);
+      setEdges(target.edges);
+      emit(target.nodes, target.edges);
+      // A drawer open on a node the step removes would edit a ghost.
+      closeSidebar();
+      syncHistoryDepth();
+    },
+    [emit, closeSidebar, syncHistoryDepth],
+  );
+
+  const undo = useCallback(() => stepHistory('past'), [stepHistory]);
+  const redo = useCallback(() => stepHistory('future'), [stepHistory]);
+
   const requestDelete = useCallback((nodeId: string): { blocked: boolean; reason?: string } => {
     const node = graphRef.current.nodes.find((candidate) => candidate.id === nodeId);
     if (node?.type === 'trigger') {
@@ -192,6 +252,17 @@ export const useWorkflowGraph = (options: UseWorkflowGraphOptions) => {
     setPendingDeleteId(nodeId);
     return { blocked: false };
   }, []);
+
+  /** Copies a criteria or action block, with its branches, next to the original. */
+  const duplicateNode = useCallback(
+    (nodeId: string, labelSuffix?: string) => {
+      const { nodes, edges } = graphRef.current;
+      const result = duplicateSubtree(nodeId, nodes, edges, labelSuffix);
+      if (!result) return;
+      commit(result.nodes, result.edges);
+    },
+    [commit],
+  );
 
   const cancelDelete = useCallback(() => setPendingDeleteId(null), []);
 
@@ -217,9 +288,13 @@ export const useWorkflowGraph = (options: UseWorkflowGraphOptions) => {
   const moveNode = useCallback(
     (nodeId: string, position: { x: number; y: number }) => {
       const { nodes, edges } = graphRef.current;
+      // Not recorded: the node was already moved live while dragging, so there
+      // is no "before" left to return to, and a layout nudge is not an edit
+      // worth an undo step.
       commit(
         nodes.map((node) => (node.id === nodeId ? { ...node, position } : node)),
         edges,
+        false,
       );
     },
     [commit],
@@ -250,12 +325,17 @@ export const useWorkflowGraph = (options: UseWorkflowGraphOptions) => {
     saveNode,
 
     requestDelete,
+    duplicateNode,
     cancelDelete,
     confirmDelete,
 
     setViewport,
     moveNode,
     connect,
+    undo,
+    redo,
+    canUndo: historyDepth.past > 0,
+    canRedo: historyDepth.future > 0,
     viewportRef,
   };
 };

@@ -5,10 +5,16 @@ import {
   KeyboardArrowDownIcon as ArrowDownIcon,
 } from '../../ui/icons';
 import { Button, ConfirmModal, Menu, Typography, ValueField } from '../../ui';
-import { SURFACE, TEXT_DANGER, TEXT_STRONG } from '../../ui/tokens';
+import { SURFACE, TEXT_DANGER, TEXT_STRONG, TEXT_SUBTLE } from '../../ui/tokens';
 import { AsyncBoundary, LoadingState } from '../../components/feedback';
 import { PageHeader, PageShell, SectionCard } from '../../components/layout';
-import { WorkflowStatusChip, WorkflowSummaryCard } from '../../components/workflow';
+import {
+  WorkflowLifecycleChip,
+  WorkflowHistoryPanel,
+  WorkflowStatusChip,
+  WorkflowSummaryCard,
+} from '../../components/workflow';
+import { ScopeFilterBar } from '../../components/builder/ScopeFilterBar';
 import { PermissionGate } from '../../permissions/PermissionGate';
 import { useApprovalPermissions } from '../../permissions/usePermission';
 import { I18N } from '../../constants/i18n-keys';
@@ -33,12 +39,24 @@ export interface WorkflowDetailViewProps {
   workflowId: string;
   /** Format a timestamp for display; defaults to the browser locale. */
   formatDate?: (value: string) => string;
+  /**
+   * Show the "Applies to" scope card. Hidden by default, matching the form.
+   * @default false
+   */
+  showScopeFilters?: boolean;
 }
 
 const DETAIL_MAX_WIDTH = 1080;
 
+/** Read-only view never changes the scope; one stable function, not one per render. */
+const NOOP = () => undefined;
+
 /** Read-only workflow, with the flow rendered on a non-interactive canvas. */
-export const WorkflowDetailView = ({ workflowId, formatDate }: WorkflowDetailViewProps) => {
+export const WorkflowDetailView = ({
+  workflowId,
+  formatDate,
+  showScopeFilters = false,
+}: WorkflowDetailViewProps) => {
   const t = useTranslate();
   const { routes, navigate, notify } = useApprovalWorkflowConfig();
   const permissions = useApprovalPermissions();
@@ -74,6 +92,11 @@ export const WorkflowDetailView = ({ workflowId, formatDate }: WorkflowDetailVie
     navigate(routes.workflowList);
   }, [workflow?.id, remove, notify, t, navigate, routes.workflowList]);
 
+  const hasScope = useMemo(() => Object.values(scope).some((ids) => ids.length > 0), [scope]);
+
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const toggleHistory = useCallback(() => setIsHistoryOpen((open) => !open), []);
+
   const openFlow = useCallback(() => setIsFlowOpen(true), []);
 
   const hasActions = permissions['workflow.edit'] || permissions['workflow.delete'];
@@ -84,11 +107,18 @@ export const WorkflowDetailView = ({ workflowId, formatDate }: WorkflowDetailVie
         <Box sx={{ bgcolor: SURFACE, minHeight: '100%' }}>
           <PageHeader
             title={
-              isFlowOpen ? t(I18N.workflow.builder) : (workflow?.name ?? t(I18N.workflow.title))
+              isFlowOpen
+                ? t(I18N.workflow.approvalFlow)
+                : (workflow?.name ?? t(I18N.workflow.title))
             }
             subtitle={isFlowOpen ? labelOf(workflow?.entity_type) : workflow?.series_number}
             adornment={
-              isFlowOpen ? undefined : <WorkflowStatusChip isActive={workflow?.is_active} />
+              isFlowOpen ? undefined : (
+                <>
+                  <WorkflowStatusChip isActive={workflow?.is_active} />
+                  <WorkflowLifecycleChip status={workflow?.status} />
+                </>
+              )
             }
             onBack={isFlowOpen ? () => setIsFlowOpen(false) : () => navigate(routes.workflowList)}
             backLabel={t(I18N.common.back)}
@@ -186,6 +216,28 @@ export const WorkflowDetailView = ({ workflowId, formatDate }: WorkflowDetailVie
                 </Grid>
               </SectionCard>
 
+              {showScopeFilters ? (
+                <SectionCard
+                  title={t(I18N.workflow.scopeSection)}
+                  description={t(I18N.workflow.scopeSectionBody)}
+                  disableBodyPadding={hasScope}
+                >
+                  {hasScope ? (
+                    <ScopeFilterBar
+                      scope={scope}
+                      onChange={NOOP}
+                      label={t(I18N.workflow.appliesTo)}
+                      onlySelected
+                      disabled
+                    />
+                  ) : (
+                    <Typography type="s4" color={TEXT_SUBTLE}>
+                      {t(I18N.workflow.noScope)}
+                    </Typography>
+                  )}
+                </SectionCard>
+              ) : null}
+
               <SectionCard
                 title={t(I18N.workflow.approvalFlow)}
                 description={createdAtLabel}
@@ -197,11 +249,30 @@ export const WorkflowDetailView = ({ workflowId, formatDate }: WorkflowDetailVie
                     // Viewing stays read-only: editing is the Actions menu's job.
                     onClick={openFlow}
                   >
-                    {t(I18N.workflow.openInEditor)}
+                    {t(I18N.workflow.viewFlow)}
                   </Button>
                 }
               >
-                <WorkflowSummaryCard graph={workflow?.graph} />
+                <WorkflowSummaryCard
+                  graph={workflow?.graph}
+                  onSelect={openFlow}
+                  emptyLabel={t(I18N.workflow.emptyFlowTitle)}
+                />
+              </SectionCard>
+
+              <SectionCard
+                title={t(I18N.workflowHistory.title)}
+                description={t(I18N.workflowHistory.description)}
+                actions={
+                  <Button variant="outlined" size="small" onClick={toggleHistory}>
+                    {t(isHistoryOpen ? I18N.workflowHistory.hide : I18N.workflowHistory.show)}
+                  </Button>
+                }
+                disableBodyPadding={!isHistoryOpen}
+              >
+                {isHistoryOpen && workflow?.id ? (
+                  <WorkflowHistoryPanel workflowId={String(workflow.id)} formatDate={formatDate} />
+                ) : null}
               </SectionCard>
             </PageShell>
           )}

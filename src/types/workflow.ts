@@ -2,6 +2,53 @@
 
 import type { WorkflowGraph } from './graph';
 
+/** One row of a workflow's change history. */
+export interface WorkflowHistoryEntry {
+  id: string;
+  /** create, publish, update, activate, deactivate or delete. */
+  action: string;
+  user_id: string | null;
+  /** Resolved server-side; `null` when the user no longer resolves. */
+  user_name: string | null;
+  /** Only the fields that changed, as they were. */
+  previous: Record<string, unknown> | null;
+  /** Only the fields that changed, as they became. */
+  updated: Record<string, unknown> | null;
+  created_at: string;
+}
+
+/** One step a sample record takes through a workflow in a test run. */
+export interface SimulationStep {
+  action_id: string;
+  name: string;
+  /** `criteria`, `approval`, or another action type such as `send_email`. */
+  type: string;
+  /** Criteria only: whether the sample met it. */
+  passed?: boolean;
+  conditions?: Array<{
+    field?: string;
+    operator?: string;
+    expected?: unknown;
+    actual?: unknown;
+    passed: boolean;
+  }>;
+  /** Set when the step could not be evaluated, e.g. the sample lacks a related record. */
+  error?: string;
+  /** Approval only: the stage's approver settings, as saved. */
+  approver?: Record<string, unknown>;
+  /** Approval only: what follows, listed but not followed. */
+  next_level?: string[];
+  after_approval?: string[];
+  after_rejection?: string[];
+}
+
+export interface SimulationResult {
+  trigger: { trigger_id: string; event_type: string } | null;
+  steps: SimulationStep[];
+  /** `approval`: reaches an approval. `no-approval`: finishes without one. `incomplete`: a step could not be evaluated. */
+  outcome: 'approval' | 'no-approval' | 'incomplete' | 'no-trigger';
+}
+
 /** Lifecycle of the workflow definition itself (not of an approval request). */
 export type WorkflowStatus = 'draft' | 'published';
 
@@ -73,4 +120,6 @@ export interface WorkflowListFilters {
   module?: string;
   entityType?: string;
   isActive?: boolean;
+  /** Draft or published, i.e. where the definition is in its own lifecycle. */
+  status?: WorkflowStatus;
 }

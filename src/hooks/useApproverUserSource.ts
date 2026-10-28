@@ -1,69 +1,84 @@
-import { useMemo } from 'react';
+import { useCallback } from 'react';
 import { useApprovalPermissions } from '../permissions/usePermission';
+import {
+  useApprovalWorkflowApi,
+  useApprovalWorkflowContext,
+} from '../providers/useApprovalWorkflowConfig';
+import { queryKeys, REFERENCE_STALE_TIME } from '../constants/query-keys';
+import {
+  mergeApproverDirectories,
+  pageApproverCandidates,
+} from '../utils/approver-directory';
+import type { ApproverCandidate, ApproverPageQuery } from '../utils/approver-directory';
 import type { WorkflowScope } from '../types/workflow';
 
-/**
- * Lookup props for the User approver selector, forwarded to the ERP
- * `SearchableSelect`.
- */
+/** Lookup props for the User approver selector, forwarded to the ERP `SearchableSelect`. */
 export interface ApproverUserSource {
-  /** Which ERP lookup the select drives. */
-  apiType: 'employees' | 'users';
-  /** Field on the fetched record that holds the *user* id. */
-  valueKey?: string;
-  /** `select` projection sent with the request. */
-  attributes?: string[];
-  /** ERP filter fragment, scoped to the workflow's companies. */
-  customeFilter: Record<string, unknown>;
+  /** Serves the select from the merged directory; the select drives paging and search. */
+  customFetchApi: (query?: ApproverPageQuery & { filters?: Record<string, unknown> }) => Promise<{
+    data: ApproverCandidate[];
+    pagination: { totalCount: number };
+  }>;
 }
 
+const EMPTY_COMPANIES: Array<string | number> = [];
+
 /**
- * Picks the directory behind the User approver.
+ * Serves the User approver from one deduplicated directory.
  *
- * A workflow stores approvers as **user** ids, and there are two ways to reach
- * them:
+ * A workflow stores approvers as **user** ids. Which directories are read
+ * depends on access:
  *
- * - With `employee` access, the employee directory is the better list — it
- *   carries display names, employment status and company scope, so
- *   `employees` is queried and projected down to each record's `user_id`.
- * - Without it, that endpoint is not readable, and the requirement is that the
- *   User option keeps working rather than disappearing. The `users` lookup is
- *   the fallback: its records *are* users, so their `id` is already the value
- *   the workflow stores and no projection is needed.
+ * - With `employee` access, the users **and** employees lookups both run and
+ *   are merged on the user id (`employee.user_id === user.id`), so each person
+ *   appears once, under their HR name, with the account name beside it when
+ *   the two differ. See `mergeApproverDirectories`.
+ * - Without it, only the users lookup runs, as before.
  *
- * Either way the persisted payload is identical, so a workflow authored by one
- * role opens correctly for the other.
+ * Either way the persisted payload is a list of user ids, so a workflow
+ * authored by one role opens correctly for the other.
  *
- * This hook only computes props. Nothing is fetched until the User approval
- * type is actually selected — the selector is not mounted before that, and
- * `SearchableSelect` fetches on open (plus once for preselected ids), never on
- * mount. Opening the action drawer therefore issues no user request at all.
+ * Nothing is fetched until the select asks for options (on open, or to label
+ * already-saved ids), so opening the action drawer issues no request. The two
+ * calls then run in parallel, and the merged result is cached per company scope
+ * so every later open, search and scroll is served from memory.
  */
 export const useApproverUserSource = (
-  // Only the company scope narrows the directory, so ask for only that — a
-  // caller holding a partial scope should not have to invent the rest.
+  // Only the company scope narrows the directory, so ask for only that.
   scope: Partial<Pick<WorkflowScope, 'company_ids'>>,
 ): ApproverUserSource => {
   const permissions = useApprovalPermissions();
-  const canReadEmployees = permissions['employee.directory'];
-  const companyIds = scope.company_ids;
+  const { reference } = useApprovalWorkflowApi();
+  const { cache } = useApprovalWorkflowContext();
+  const withEmployees = permissions['employee.directory'];
+  const companyIds = scope.company_ids ?? EMPTY_COMPANIES;
+  const scopeKey = companyIds.join(',');
 
-  return useMemo(() => {
-    const companies = companyIds ?? [];
+  const customFetchApi = useCallback<ApproverUserSource['customFetchApi']>(
+    async (query = {}) => {
+      const candidates = await cache.fetch(
+        queryKeys.reference.approverDirectory(scopeKey, withEmployees),
+        async (signal) => {
+          const [users, employees] = await Promise.all([
+            reference.approverUsers(companyIds, signal),
+            withEmployees ? reference.approverEmployees(companyIds, signal) : Promise.resolve([]),
+          ]);
+          return mergeApproverDirectories(users, employees);
+        },
+        { staleTime: REFERENCE_STALE_TIME },
+      );
 
-    if (!canReadEmployees) {
-      return {
-        apiType: 'users',
-        customeFilter: { '&company_id.in': companies },
-      };
-    }
+      // The select resolves saved values with an `&id.in` filter.
+      const ids = query.filters?.['&id.in'];
+      return pageApproverCandidates(candidates, {
+        ...query,
+        ids: Array.isArray(ids) ? (ids as Array<number | string>) : undefined,
+      });
+    },
+    // `scopeKey` stands in for `companyIds`, whose identity changes per render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cache, reference, scopeKey, withEmployees],
+  );
 
-    return {
-      apiType: 'employees',
-      valueKey: 'user_id',
-      attributes: ['user_id'],
-      // Employees with no linked user account cannot approve anything.
-      customeFilter: { '&user_id.ne': null, '&company_id.in': companies },
-    };
-  }, [canReadEmployees, companyIds]);
+  return { customFetchApi };
 };

@@ -83,6 +83,28 @@ export const WorkflowStatusChip = ({
   );
 };
 
+export interface WorkflowLifecycleChipProps {
+  status: 'draft' | 'published' | undefined;
+  classNamePrefix?: string;
+}
+
+/** Draft / published chip: where the workflow definition is in its own lifecycle. */
+export const WorkflowLifecycleChip = ({
+  status,
+  classNamePrefix = 'approval-workflow--LifecycleChip--',
+}: WorkflowLifecycleChipProps) => {
+  const t = useOptionalTranslate();
+  if (!status) return null;
+
+  return (
+    <StatusChip
+      label={t(status === 'published' ? I18N.workflow.statusPublished : I18N.workflow.statusDraft)}
+      tone={status === 'published' ? 'progress' : 'neutral'}
+      className={`${classNamePrefix}${status === 'published' ? 'Published' : 'Draft'}`}
+    />
+  );
+};
+
 export interface ApprovalStatusChipProps {
   status: string | undefined;
   classNamePrefix?: string;

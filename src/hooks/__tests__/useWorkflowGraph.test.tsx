@@ -359,4 +359,101 @@ describe('actions configured on a Pass/Fail branch', () => {
       y: 20,
     });
   });
+
+  describe('undo / redo', () => {
+    const addCriteria = (result: { current: ReturnType<typeof useWorkflowGraph> }) => {
+      const rootId = result.current.nodes[0].id;
+      act(() => result.current.openCriteriaSidebar(rootId));
+      act(() =>
+        result.current.saveNode(
+          result.current.sidebar.nodeId as string,
+          { label: 'Criteria', conditions: [] },
+          { parentNodeId: rootId, kind: 'criteria' },
+        ),
+      );
+    };
+
+    it('steps back and forward through an edit, emitting each state', () => {
+      const onChange = vi.fn();
+      const { result } = renderHook(() => useWorkflowGraph({ trigger, onChange }));
+      expect(result.current.canUndo).toBe(false);
+
+      addCriteria(result);
+      expect(result.current.nodes).toHaveLength(4);
+      expect(result.current.canUndo).toBe(true);
+
+      act(() => result.current.undo());
+      expect(result.current.nodes).toHaveLength(1);
+      expect(result.current.canRedo).toBe(true);
+      expect(onChange.mock.calls.at(-1)?.[0].nodes).toHaveLength(1);
+
+      act(() => result.current.redo());
+      expect(result.current.nodes).toHaveLength(4);
+      expect(result.current.canRedo).toBe(false);
+    });
+
+    it('drops the redo stack when a new edit is made', () => {
+      const { result } = renderHook(() => useWorkflowGraph({ trigger }));
+      addCriteria(result);
+      act(() => result.current.undo());
+      expect(result.current.canRedo).toBe(true);
+
+      addCriteria(result);
+      expect(result.current.canRedo).toBe(false);
+    });
+
+    it('does not record a drag as an edit', () => {
+      const { result } = renderHook(() => useWorkflowGraph({ trigger }));
+      act(() => result.current.moveNode(result.current.nodes[0].id, { x: 40, y: 40 }));
+      expect(result.current.canUndo).toBe(false);
+    });
+
+    it('closes an open drawer when stepping, so it cannot edit a removed node', () => {
+      const { result } = renderHook(() => useWorkflowGraph({ trigger }));
+      addCriteria(result);
+      act(() => result.current.openSidebarForNode(result.current.nodes[1].id));
+      expect(result.current.sidebar.isOpen).toBe(true);
+
+      act(() => result.current.undo());
+      expect(result.current.sidebar.isOpen).toBe(false);
+    });
+  });
+
+  describe('duplicateNode', () => {
+    it('copies a block with its branches and can be undone', () => {
+      const onChange = vi.fn();
+      const { result } = renderHook(() => useWorkflowGraph({ trigger, onChange }));
+      const rootId = result.current.nodes[0].id;
+
+      act(() => result.current.openCriteriaSidebar(rootId));
+      act(() =>
+        result.current.saveNode(
+          result.current.sidebar.nodeId as string,
+          { label: 'Large order', conditions: [] },
+          { parentNodeId: rootId, kind: 'criteria' },
+        ),
+      );
+      const criteria = result.current.nodes.find((node) => node.type === 'criteria');
+
+      act(() => result.current.duplicateNode(criteria?.id as string, ' (copy)'));
+
+      expect(result.current.nodes).toHaveLength(7);
+      expect(
+        result.current.nodes.some(
+          (node) => (node.data as { label: string }).label === 'Large order (copy)',
+        ),
+      ).toBe(true);
+      expect(onChange.mock.calls.at(-1)?.[0].nodes).toHaveLength(7);
+
+      act(() => result.current.undo());
+      expect(result.current.nodes).toHaveLength(4);
+    });
+
+    it('ignores the trigger', () => {
+      const { result } = renderHook(() => useWorkflowGraph({ trigger }));
+      act(() => result.current.duplicateNode(result.current.nodes[0].id));
+      expect(result.current.nodes).toHaveLength(1);
+      expect(result.current.canUndo).toBe(false);
+    });
+  });
 });

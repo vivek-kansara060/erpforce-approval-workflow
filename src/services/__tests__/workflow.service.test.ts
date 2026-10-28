@@ -15,6 +15,9 @@ const makeApi = (): WorkflowApi => ({
   create: vi.fn().mockImplementation(async (payload) => payload),
   update: vi.fn().mockImplementation(async (payload) => payload),
   remove: vi.fn().mockResolvedValue(undefined),
+  toggle: vi.fn().mockResolvedValue(false),
+  history: vi.fn().mockResolvedValue([]),
+  simulate: vi.fn().mockResolvedValue({ trigger: null, steps: [], outcome: 'no-trigger' }),
 });
 
 const validValues = (overrides: Partial<WorkflowFormValues> = {}): WorkflowFormValues => ({
@@ -202,6 +205,19 @@ describe('remove', () => {
     await service.remove('wf-1');
 
     expect(api.remove).toHaveBeenCalledWith('wf-1');
+    expect(invalidate).toHaveBeenCalledWith(['workflow']);
+  });
+});
+
+describe('toggle', () => {
+  it('flips the workflow, returns its new state and invalidates the list', async () => {
+    const cache = createQueryCache();
+    const invalidate = vi.spyOn(cache, 'invalidate');
+    const { api, service } = makeService(makeApi(), cache);
+
+    await expect(service.toggle('wf-1')).resolves.toBe(false);
+
+    expect(api.toggle).toHaveBeenCalledWith('wf-1');
     expect(invalidate).toHaveBeenCalledWith(['workflow']);
   });
 });

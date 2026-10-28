@@ -17,6 +17,7 @@ export const WORKFLOW_FIELDS = {
   REQUEST_TYPE: 'request_type',
   IS_ACTIVE: 'is_active',
   STATUS: 'status',
+  UPDATED_AT: 'updated_at',
   GRAPH: 'graph',
   COMPANY_IDS: 'company_ids',
   LOCATION_IDS: 'location_ids',
@@ -65,4 +66,10 @@ export const WORKFLOW_REQUIRED_SELECT_FIELDS = [
   'request_type_data',
   'request_category_data',
   'series_number',
+  // The scope columns summarise all five lists, so all five are always fetched.
+  'company_ids',
+  'location_ids',
+  'department_ids',
+  'grade_ids',
+  'employment_type_ids',
 ] as const;

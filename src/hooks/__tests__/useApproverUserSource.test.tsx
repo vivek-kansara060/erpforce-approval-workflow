@@ -1,60 +1,119 @@
-import { describe, expect, it } from 'vitest';
+import type { ReactNode } from 'react';
+import { describe, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
+import { ApprovalWorkflowProvider } from '../../providers/ApprovalWorkflowProvider';
 import { useApproverUserSource } from '../useApproverUserSource';
 import { setErpPermissions } from '../../test/stubs/erp-use-permissions';
+import type { HttpClient, HttpRequest } from '../../types/http';
 
-const scope = { company_ids: [7] };
+const routes = {
+  workflowList: '/wf',
+  workflowCreate: '/wf/new',
+  workflowEdit: '/wf/:id/edit',
+  workflowView: '/wf/:id',
+  approvalDashboard: '/approvals',
+  approvalView: '/approvals/:id',
+};
+
+const makeHttp = () =>
+  vi.fn(async (request: HttpRequest) => {
+    if (request.service === 'hrms') {
+      return { data: { employees: [{ user_id: 2, name: 'Pooja Shah' }] } };
+    }
+    return {
+      data: {
+        users: [
+          { id: 1, first_name: 'Priya', last_name: 'Sharma' },
+          { id: 2, first_name: 'P.', last_name: 'Shah' },
+        ],
+      },
+    };
+  });
+
+const setup = (http: ReturnType<typeof makeHttp>, scope = { company_ids: [7] }) => {
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <ApprovalWorkflowProvider
+      http={http as unknown as HttpClient}
+      moduleContext={{ module: 'procurement' }}
+      currentUser={{ id: 1 }}
+      routes={routes}
+      navigate={vi.fn()}
+      entityCatalogue={[]}
+    >
+      {children}
+    </ApprovalWorkflowProvider>
+  );
+  return renderHook(() => useApproverUserSource(scope), { wrapper });
+};
 
 describe('useApproverUserSource', () => {
-  it('reads the employee directory when the employee permission is granted', () => {
+  it('fetches nothing until the select asks for options', () => {
     setErpPermissions({ Employee: { canView: true } });
+    const http = makeHttp();
 
-    const { result } = renderHook(() => useApproverUserSource(scope));
+    setup(http);
 
-    expect(result.current).toEqual({
-      apiType: 'employees',
-      valueKey: 'user_id',
-      attributes: ['user_id'],
-      customeFilter: { '&user_id.ne': null, '&company_id.in': [7] },
-    });
+    expect(http).not.toHaveBeenCalled();
   });
 
-  it('falls back to the users API when the employee permission is absent', () => {
-    setErpPermissions({});
-
-    const { result } = renderHook(() => useApproverUserSource(scope));
-
-    expect(result.current.apiType).toBe('users');
-    expect(result.current.customeFilter).toEqual({ '&company_id.in': [7] });
-  });
-
-  it('stores user ids either way, so a workflow opens correctly for both roles', () => {
+  it('with employee access, calls both directories and merges them on user id', async () => {
     setErpPermissions({ Employee: { canView: true } });
-    const { result: withEmployees } = renderHook(() => useApproverUserSource(scope));
+    const http = makeHttp();
 
-    setErpPermissions({});
-    const { result: withUsers } = renderHook(() => useApproverUserSource(scope));
+    const { result } = setup(http);
+    const page = await result.current.customFetchApi({ skip: 0, limit: 25 });
 
-    // The employee record is projected down to its `user_id`; a user record's
-    // own id already is the user id, so no projection is needed.
-    expect(withEmployees.current.valueKey).toBe('user_id');
-    expect(withUsers.current.valueKey).toBeUndefined();
+    const services = http.mock.calls.map(([request]) => request.service).sort();
+    expect(services).toEqual(['hrms', 'rbac']);
+    expect(page.data.map((c) => c.label)).toEqual(['Pooja Shah (P. Shah)', 'Priya Sharma']);
+    expect(page.pagination.totalCount).toBe(2);
   });
 
-  it('tolerates an unscoped workflow', () => {
-    setErpPermissions({});
-
-    const { result } = renderHook(() => useApproverUserSource({}));
-    expect(result.current.customeFilter).toEqual({ '&company_id.in': [] });
-  });
-
-  it('keeps a stable object while the scope and permissions hold', () => {
+  it('scopes both calls to the workflow companies', async () => {
     setErpPermissions({ Employee: { canView: true } });
+    const http = makeHttp();
 
-    const { result, rerender } = renderHook(() => useApproverUserSource(scope));
-    const first = result.current;
+    const { result } = setup(http);
+    await result.current.customFetchApi();
+
+    for (const [request] of http.mock.calls) {
+      expect(request.query?.filters).toContain('company_id.in=7');
+    }
+  });
+
+  it('without employee access, calls only the users directory', async () => {
+    setErpPermissions({});
+    const http = makeHttp();
+
+    const { result } = setup(http);
+    const page = await result.current.customFetchApi();
+
+    expect(http.mock.calls.map(([request]) => request.service)).toEqual(['rbac']);
+    expect(page.data.map((c) => c.label)).toEqual(['P. Shah', 'Priya Sharma']);
+  });
+
+  it('serves later opens, searches and saved-id lookups from one cached load', async () => {
+    setErpPermissions({ Employee: { canView: true } });
+    const http = makeHttp();
+
+    const { result } = setup(http);
+    await result.current.customFetchApi();
+    const search = await result.current.customFetchApi({ search: 'pooja' });
+    const saved = await result.current.customFetchApi({ filters: { '&id.in': [1] } });
+
+    expect(http).toHaveBeenCalledTimes(2);
+    expect(search.data.map((c) => c.value)).toEqual([2]);
+    expect(saved.data.map((c) => c.value)).toEqual([1]);
+  });
+
+  it('keeps a stable callback while the scope and permissions hold', () => {
+    setErpPermissions({});
+    const http = makeHttp();
+
+    const { result, rerender } = setup(http);
+    const first = result.current.customFetchApi;
     rerender();
 
-    expect(result.current).toBe(first);
+    expect(result.current.customFetchApi).toBe(first);
   });
 });

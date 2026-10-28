@@ -19,6 +19,10 @@ export interface WorkflowSummaryCardProps {
   createdAtLabel?: string;
   onOpenEditor?: () => void;
   openEditorLabel?: string;
+  /** Makes each tile a button that opens the flow, e.g. the read-only canvas. */
+  onSelect?: () => void;
+  /** Shown under the tiles when the flow has no criteria or actions yet. */
+  emptyLabel?: string;
   /** Heading strip. Omit when the card already sits inside a titled section. */
   heading?: string;
   triggersLabel?: string;
@@ -40,6 +44,8 @@ export const WorkflowSummaryCard = ({
   createdAtLabel,
   onOpenEditor,
   openEditorLabel = 'Open in Editor',
+  onSelect,
+  emptyLabel,
   heading,
   triggersLabel = 'Triggers',
   criteriaLabel = 'Criteria',
@@ -110,7 +116,27 @@ export const WorkflowSummaryCard = ({
         {stats.map((stat) => (
           <Box
             key={stat.key}
+            {...(onSelect
+              ? {
+                  role: 'button',
+                  tabIndex: 0,
+                  onClick: onSelect,
+                  onKeyDown: (event: React.KeyboardEvent) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onSelect();
+                    }
+                  },
+                }
+              : null)}
             sx={{
+              ...(onSelect
+                ? {
+                    cursor: 'pointer',
+                    transition: 'border-color 140ms ease',
+                    '&:hover, &:focus-visible': { borderColor: 'theme.primary.600' },
+                  }
+                : null),
               display: 'flex',
               alignItems: 'center',
               gap: 1.25,
@@ -152,6 +178,12 @@ export const WorkflowSummaryCard = ({
           </Box>
         ))}
       </Box>
+
+      {emptyLabel && counts.criteria + counts.actions === 0 ? (
+        <Typography type="s4" color={TEXT_SUBTLE}>
+          {emptyLabel}
+        </Typography>
+      ) : null}
     </Box>
   );
 };

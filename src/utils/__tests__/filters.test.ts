@@ -149,4 +149,11 @@ describe('buildWorkflowFilter', () => {
   it('includes is_active when it is explicitly false', () => {
     expect(buildWorkflowFilter({ isActive: false })).toBe('is_active.eq=false');
   });
+
+  it('filters by draft or published, alongside the other filters', () => {
+    expect(buildWorkflowFilter({ status: 'draft' })).toBe('status.eq=draft');
+    expect(buildWorkflowFilter({ module: 'hrms', isActive: true, status: 'published' })).toBe(
+      'module.eq=hrms&is_active.eq=true&status.eq=published',
+    );
+  });
 });

@@ -82,6 +82,7 @@ const http = createFetchHttpClient({
     systemFeature: `${env.GATEWAY_URL}/system-feature`,
     rbac: `${env.GATEWAY_URL}/rbac`,
     organization: `${env.GATEWAY_URL}/hrms`,
+    hrms: `${env.GATEWAY_URL}/hrms`,
   },
   getHeaders: () => getToken(),
 });

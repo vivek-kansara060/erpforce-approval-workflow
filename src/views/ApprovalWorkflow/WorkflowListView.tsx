@@ -3,13 +3,13 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Box } from '@mui/material';
+import { Box, MenuItem, TextField as MuiTextField } from '@mui/material';
 import { AddIcon } from '../../ui/icons';
 import { Button, ConfirmModal } from '../../ui';
-import { SURFACE } from '../../ui/tokens';
-import { AsyncBoundary } from '../../components/feedback';
+import { SURFACE, searchFieldSx } from '../../ui/tokens';
+import { AsyncBoundary, EmptyState } from '../../components/feedback';
 import { DataTable, ListToolbar, RowLink } from '../../components/list';
-import { WorkflowStatusChip } from '../../components/workflow';
+import { WorkflowLifecycleChip, WorkflowStatusChip } from '../../components/workflow';
 import { PermissionGate } from '../../permissions/PermissionGate';
 import { useApprovalPermissions } from '../../permissions/usePermission';
 import { I18N } from '../../constants/i18n-keys';
@@ -19,6 +19,7 @@ import {
   NON_EDITABLE_WORKFLOW_STATUSES,
 } from '../../constants/defaults';
 import { withId } from '../../utils/route';
+import { formatTimestamp } from '../../utils/format';
 import { useWorkflowList } from '../../hooks/useWorkflowList';
 import { useEntityCatalogue, useReferenceOptions } from '../../hooks/useWorkflowReferences';
 import {
@@ -27,6 +28,9 @@ import {
   useTranslate,
 } from '../../providers/useApprovalWorkflowConfig';
 import type { Workflow, WorkflowListFilters } from '../../types/workflow';
+
+/** The publish and active filters are built but switched off for now. */
+const SHOW_STATUS_FILTERS = false;
 
 export interface WorkflowListViewProps {
   /** Extra server-side filters, e.g. pin the list to one entity type. */
@@ -57,6 +61,21 @@ export const WorkflowListView = ({
   const notifyError = useNotifyError();
   const permissions = useApprovalPermissions();
 
+  // Filter controls live in the default toolbar. Anything the host pins through
+  // `filters` wins and its control is not offered.
+  const [publishFilter, setPublishFilter] = useState<'' | 'draft' | 'published'>('');
+  const [activeFilter, setActiveFilter] = useState<'' | 'true' | 'false'>('');
+
+  const effectiveFilters = useMemo<WorkflowListFilters>(
+    () => ({
+      ...(publishFilter ? { status: publishFilter } : null),
+      ...(activeFilter ? { isActive: activeFilter === 'true' } : null),
+      ...filters,
+    }),
+    [filters, publishFilter, activeFilter],
+  );
+  const hasActiveFilter = Boolean(publishFilter || activeFilter);
+
   const {
     rows,
     totalCount,
@@ -69,7 +88,13 @@ export const WorkflowListView = ({
     setSearch,
     deleteWorkflow,
     isDeleting,
-  } = useWorkflowList({ filters, scopeToModule, onDeleteError: notifyError });
+    toggleWorkflow,
+  } = useWorkflowList({
+    filters: effectiveFilters,
+    scopeToModule,
+    onDeleteError: notifyError,
+    onToggleError: notifyError,
+  });
 
   const { labelOf } = useEntityCatalogue();
   const { options: actionTypes } = useReferenceOptions('action_type');
@@ -86,6 +111,25 @@ export const WorkflowListView = ({
   const requestTypeLabel = useCallback(
     (value: unknown) => actionTypes.find((option) => option.value === value)?.label ?? '-',
     [actionTypes],
+  );
+
+  // "Companies (2), Departments (1)": how many of each, without a lookup per row.
+  const scopeSummary = useCallback(
+    (workflow: Workflow) => {
+      const parts: Array<[string, number | undefined]> = [
+        [t(I18N.workflow.scopeCompanies), workflow.company_ids?.length],
+        [t(I18N.workflow.scopeLocations), workflow.location_ids?.length],
+        [t(I18N.workflow.scopeDepartments), workflow.department_ids?.length],
+        [t(I18N.workflow.scopeGrades), workflow.grade_ids?.length],
+        [t(I18N.workflow.scopeTypes), workflow.employment_type_ids?.length],
+      ];
+      const text = parts
+        .filter(([, count]) => count)
+        .map(([label, count]) => `${label} (${count})`)
+        .join(', ');
+      return text || '-';
+    },
+    [t],
   );
 
   const columns = useMemo(
@@ -105,6 +149,16 @@ export const WorkflowListView = ({
               requestTypeLabel(workflow.request_type)
             ) : column.accessorKey === 'is_active' ? (
               <WorkflowStatusChip isActive={workflow.is_active} />
+            ) : column.accessorKey === 'company_ids' ? (
+              scopeSummary(workflow)
+            ) : column.accessorKey === 'status' ? (
+              workflow.status ? (
+                <WorkflowLifecycleChip status={workflow.status} />
+              ) : (
+                '-'
+              )
+            ) : column.accessorKey === 'updated_at' ? (
+              (formatTimestamp(workflow.updated_at) ?? '-')
             ) : (
               (renderedCellValue ?? '-')
             );
@@ -120,15 +174,27 @@ export const WorkflowListView = ({
           );
         },
       })),
-    [t, routes.workflowView, labelOf, requestTypeLabel, permissions, navigate],
+    [t, routes.workflowView, labelOf, requestTypeLabel, scopeSummary, permissions, navigate],
+  );
+
+  const changeActive = useCallback(
+    async (workflow: Workflow, activate: boolean) => {
+      if (!workflow.id) return;
+      // A failed toggle (say, a second live copy) has already been announced.
+      if ((await toggleWorkflow(String(workflow.id))) === undefined) return;
+      notify(
+        t(activate ? I18N.workflow.activatedMessage : I18N.workflow.deactivatedMessage),
+        'success',
+      );
+    },
+    [toggleWorkflow, notify, t],
   );
 
   const rowActions = useMemo(
     () => [
       {
         label: t(I18N.common.edit),
-        handleAction: (workflow: Workflow) =>
-          navigate(withId(routes.workflowEdit, workflow.id)),
+        handleAction: (workflow: Workflow) => navigate(withId(routes.workflowEdit, workflow.id)),
         disabled: (workflow: Workflow) =>
           !permissions['workflow.edit'] ||
           NON_EDITABLE_WORKFLOW_STATUSES.includes(
@@ -136,13 +202,25 @@ export const WorkflowListView = ({
           ),
       },
       {
+        label: t(I18N.workflow.activate),
+        handleAction: (workflow: Workflow) => changeActive(workflow, true),
+        disabled: (workflow: Workflow) => !permissions['workflow.activate'] || workflow.is_active,
+      },
+      {
+        label: t(I18N.workflow.deactivate),
+        handleAction: (workflow: Workflow) => changeActive(workflow, false),
+        disabled: (workflow: Workflow) => !permissions['workflow.activate'] || !workflow.is_active,
+      },
+      {
         label: t(I18N.common.duplicate),
         handleAction: (workflow: Workflow) =>
-          navigate(`${routes.workflowCreate}?duplicateOf=${encodeURIComponent(String(workflow.id))}`),
+          navigate(
+            `${routes.workflowCreate}?duplicateOf=${encodeURIComponent(String(workflow.id))}`,
+          ),
         disabled: () => !canAdd,
       },
     ],
-    [t, navigate, routes.workflowEdit, routes.workflowCreate, permissions, canAdd],
+    [t, navigate, routes.workflowEdit, routes.workflowCreate, permissions, canAdd, changeActive],
   );
 
   const destructiveActions = useMemo(
@@ -158,6 +236,46 @@ export const WorkflowListView = ({
       },
     ],
     [t, permissions],
+  );
+
+  const changeFilter = useCallback(
+    (setter: (value: never) => void) => (event: { target: { value: string } }) => {
+      setter(event.target.value as never);
+      // A narrower result set may not have the page the user is on.
+      listState.update({ pagination: { ...listState.pagination, pageNo: 1 } });
+    },
+    [listState],
+  );
+
+  const clearSearchAndFilters = useCallback(() => {
+    setPublishFilter('');
+    setActiveFilter('');
+    setSearch('');
+  }, [setSearch]);
+
+  const filterControl = (
+    label: string,
+    value: string,
+    onChange: (event: { target: { value: string } }) => void,
+    options: Array<{ value: string; label: string }>,
+  ) => (
+    <MuiTextField
+      select
+      size="small"
+      value={value}
+      onChange={onChange}
+      label={label}
+      sx={{ ...searchFieldSx, minWidth: 150 }}
+      InputLabelProps={{ shrink: true }}
+      SelectProps={{ displayEmpty: true }}
+    >
+      <MenuItem value="">{t(I18N.workflow.filterAll)}</MenuItem>
+      {options.map((option) => (
+        <MenuItem key={option.value} value={option.value}>
+          {option.label}
+        </MenuItem>
+      ))}
+    </MuiTextField>
   );
 
   const confirmDelete = useCallback(async () => {
@@ -188,6 +306,34 @@ export const WorkflowListView = ({
             onAdd={goToCreate}
             addLabel={t(I18N.workflow.add)}
             showAdd={canAdd}
+            actions={
+              SHOW_STATUS_FILTERS ? (
+                <>
+                  {filters?.status === undefined
+                    ? filterControl(
+                        t(I18N.workflow.filterPublishStatus),
+                        publishFilter,
+                        changeFilter(setPublishFilter),
+                        [
+                          { value: 'draft', label: t(I18N.workflow.statusDraft) },
+                          { value: 'published', label: t(I18N.workflow.statusPublished) },
+                        ],
+                      )
+                    : null}
+                  {filters?.isActive === undefined
+                    ? filterControl(
+                        t(I18N.workflow.filterStatus),
+                        activeFilter,
+                        changeFilter(setActiveFilter),
+                        [
+                          { value: 'true', label: t(I18N.workflow.active) },
+                          { value: 'false', label: t(I18N.workflow.inactive) },
+                        ],
+                      )
+                    : null}
+                </>
+              ) : null
+            }
           />
         )}
 
@@ -195,30 +341,46 @@ export const WorkflowListView = ({
           isLoading={isLoading}
           error={error}
           onRetry={refetch}
-          isEmpty={rows.length === 0 && !listState.search}
+          isEmpty={rows.length === 0 && !listState.search && !hasActiveFilter}
           emptyTitle={t(I18N.workflow.emptyListTitle)}
           emptyDescription={t(I18N.workflow.emptyListBody)}
           emptyAction={
             canAdd ? (
-              <Button variant="contained" startIcon={<AddIcon fontSize="small" />} onClick={goToCreate}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon fontSize="small" />}
+                onClick={goToCreate}
+              >
                 {t(I18N.workflow.add)}
               </Button>
             ) : undefined
           }
           variant="page"
         >
-          <DataTable
-            rows={rows}
-            columns={columns}
-            pagination={{ ...listState.pagination, totalCount }}
-            isLoading={isLoading}
-            onPageChange={setPage}
-            onPageSizeChange={setPageSize}
-            onSortChange={(sort) => listState.update({ sort })}
-            rowActions={rowActions}
-            destructiveActions={destructiveActions}
-            paginationResource="approval-workflow"
-          />
+          {rows.length === 0 && (listState.search || hasActiveFilter) ? (
+            <EmptyState
+              title={t(I18N.workflow.noResultsTitle)}
+              description={t(I18N.workflow.noResultsBody)}
+              action={
+                <Button variant="outlined" onClick={clearSearchAndFilters}>
+                  {t(I18N.workflow.clearSearch)}
+                </Button>
+              }
+            />
+          ) : (
+            <DataTable
+              rows={rows}
+              columns={columns}
+              pagination={{ ...listState.pagination, totalCount }}
+              isLoading={isLoading}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              onSortChange={(sort) => listState.update({ sort })}
+              rowActions={rowActions}
+              destructiveActions={destructiveActions}
+              paginationResource="approval-workflow"
+            />
+          )}
         </AsyncBoundary>
 
         <ConfirmModal

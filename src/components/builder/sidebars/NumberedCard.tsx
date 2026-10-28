@@ -6,6 +6,8 @@ import { BORDER, FILL_SUBTLE, RADIUS, SURFACE, dangerIconButtonSx } from '../../
 export interface NumberedCardProps {
   /** Left side of the header strip, e.g. "Stage 2". */
   heading: ReactNode;
+  /** Extra controls in the header strip, before the delete button. */
+  actions?: ReactNode;
   /** Renders the delete button when given. */
   onRemove?: () => void;
   removeLabel?: string;
@@ -20,6 +22,7 @@ export interface NumberedCardProps {
  */
 export const NumberedCard = ({
   heading,
+  actions,
   onRemove,
   removeLabel,
   bodyGap = 2,
@@ -49,16 +52,19 @@ export const NumberedCard = ({
     >
       {heading}
 
-      {onRemove ? (
-        <IconButton
-          size="small"
-          aria-label={removeLabel}
-          onClick={onRemove}
-          sx={dangerIconButtonSx}
-        >
-          <TrashIcon fontSize="small" />
-        </IconButton>
-      ) : null}
+      <Box display="flex" alignItems="center" gap={0.25}>
+        {actions}
+        {onRemove ? (
+          <IconButton
+            size="small"
+            aria-label={removeLabel}
+            onClick={onRemove}
+            sx={dangerIconButtonSx}
+          >
+            <TrashIcon fontSize="small" />
+          </IconButton>
+        ) : null}
+      </Box>
     </Box>
 
     <Box px={2} py={2} display="flex" flexDirection="column" gap={bodyGap}>
