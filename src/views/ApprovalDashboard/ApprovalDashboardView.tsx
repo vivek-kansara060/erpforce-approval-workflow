@@ -1,13 +1,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any --
  * MaterialTable cell render props are typed by @erpsquad/common. */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Box } from '@mui/material';
-import { SURFACE } from '../../ui/tokens';
+import { Box, CircularProgress } from '@mui/material';
+import { Button } from '../../ui';
+import { RefreshIcon } from '../../ui/icons';
+import { ACCENT, SURFACE } from '../../ui/tokens';
 import { AsyncBoundary } from '../../components/feedback';
 import { DataTable, ListToolbar, RowLink } from '../../components/list';
 import { ApprovalStatusChip } from '../../components/workflow';
+import { RecordDetailsModal } from '../../components/modals';
 import { DecisionModals } from './DecisionModals';
 import { useApprovalRecordLinks } from './useApprovalRecordLinks';
 import { PermissionGate } from '../../permissions/PermissionGate';
@@ -16,6 +19,7 @@ import { I18N } from '../../constants/i18n-keys';
 import { APPROVAL_DASHBOARD_COLUMNS } from '../../constants/columns';
 import { APPROVAL_FIELDS } from '../../constants/fields';
 import { isPending } from '../../utils/status';
+import { getSeriesNumber } from '../../utils/entity-data';
 import { useApprovalRequests } from '../../hooks/useApprovalRequests';
 import { useApprovalDecision } from '../../hooks/useApprovalDecision';
 import { useTranslate } from '../../providers/useApprovalWorkflowConfig';
@@ -28,7 +32,13 @@ export interface ApprovalDashboardViewProps {
   /** Set false to include already-decided requests. @default true */
   pendingOnly?: boolean;
   title?: string;
-  renderToolbar?: (context: { search: string; setSearch: (search: string) => void }) => ReactNode;
+  renderToolbar?: (context: {
+    search: string;
+    setSearch: (search: string) => void;
+    /** Reloads the queue from the server, bypassing the cache. */
+    refresh: () => void;
+    isRefreshing: boolean;
+  }) => ReactNode;
 }
 
 /**
@@ -49,11 +59,13 @@ export const ApprovalDashboardView = ({
   const t = useTranslate();
   const permissions = useApprovalPermissions();
   const { entityTitle, recordRoute, openRecord } = useApprovalRecordLinks();
+  const [detailsRequest, setDetailsRequest] = useState<ApprovalRequest | null>(null);
 
   const {
     rows,
     totalCount,
     isLoading,
+    isRefetching,
     error,
     refetch,
     listState,
@@ -72,6 +84,36 @@ export const ApprovalDashboardView = ({
         header: t([column.header, column.label] as const),
         Cell: ({ row, renderedCellValue }: any) => {
           const request = row.original as ApprovalRequest;
+
+          // Opens the record's details in a modal instead of navigating, so it
+          // is a button rather than a RowLink.
+          if (column.accessorKey === APPROVAL_FIELDS.RECORD_REF) {
+            const series = getSeriesNumber(request.entity_type_data);
+            if (!series) return '-';
+            return (
+              <Box
+                component="button"
+                type="button"
+                onClick={() => setDetailsRequest(request)}
+                sx={{
+                  // Same look as the ID column's RowLink (emphasis): accent,
+                  // medium weight, underline on hover only.
+                  '&&': {
+                    all: 'unset',
+                    display: 'block',
+                    cursor: 'pointer',
+                    color: ACCENT,
+                    fontWeight: 500,
+                    textDecoration: 'none',
+                  },
+                  '&&:hover': { textDecoration: 'underline' },
+                  '&&:focus-visible': { outline: '2px solid', outlineColor: ACCENT },
+                }}
+              >
+                {series}
+              </Box>
+            );
+          }
 
           const content =
             column.accessorKey === APPROVAL_FIELDS.STATUS ? (
@@ -133,7 +175,12 @@ export const ApprovalDashboardView = ({
     <PermissionGate capability="approval.view">
       <Box sx={{ bgcolor: SURFACE, minHeight: '100%' }}>
         {renderToolbar ? (
-          renderToolbar({ search: listState.search, setSearch })
+          renderToolbar({
+            search: listState.search,
+            setSearch,
+            refresh: () => void refetch(),
+            isRefreshing: isRefetching,
+          })
         ) : (
           <ListToolbar
             title={title ?? t(I18N.dashboard.title)}
@@ -142,6 +189,22 @@ export const ApprovalDashboardView = ({
             searchPlaceholder={t(I18N.common.search)}
             totalCount={totalCount}
             showAdd={false}
+            actions={
+              <Button
+                variant="outlined"
+                startIcon={
+                  isRefetching ? (
+                    <CircularProgress size={16} color="inherit" />
+                  ) : (
+                    <RefreshIcon fontSize="small" />
+                  )
+                }
+                onClick={() => void refetch()}
+                disabled={isRefetching}
+              >
+                {t(I18N.dashboard.refresh)}
+              </Button>
+            }
           />
         )}
 
@@ -168,6 +231,23 @@ export const ApprovalDashboardView = ({
         </AsyncBoundary>
 
         <DecisionModals decision={decision} />
+
+        <RecordDetailsModal
+          open={Boolean(detailsRequest)}
+          onClose={() => setDetailsRequest(null)}
+          title={
+            getSeriesNumber(detailsRequest?.entity_type_data) ?? t(I18N.dashboard.recordDetails)
+          }
+          subtitle={detailsRequest ? entityTitle(detailsRequest) : undefined}
+          data={detailsRequest?.entity_type_data}
+          labels={{
+            none: t(I18N.dashboard.recordNone),
+            yes: t(I18N.dashboard.recordYes),
+            no: t(I18N.dashboard.recordNo),
+            empty: t(I18N.dashboard.recordDetailsEmpty),
+            close: t(I18N.dashboard.recordDetailsClose),
+          }}
+        />
       </Box>
     </PermissionGate>
   );

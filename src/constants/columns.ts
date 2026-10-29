@@ -92,6 +92,13 @@ export const APPROVAL_DASHBOARD_COLUMNS: ApprovalTableColumn[] = [
     type: 'custom',
   },
   {
+    accessorKey: APPROVAL_FIELDS.RECORD_REF,
+    header: 'approval-dashboard.columns.record_ref',
+    label: 'Record No.',
+    visible: true,
+    type: 'custom',
+  },
+  {
     accessorKey: APPROVAL_FIELDS.DESCRIPTION,
     header: 'approval-dashboard.columns.description',
     label: 'Description',

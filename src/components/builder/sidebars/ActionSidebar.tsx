@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Box, FormControlLabel, IconButton } from '@mui/material';
+import { Box, Chip, FormControlLabel, IconButton } from '@mui/material';
 import { AddIcon, ArrowDownwardIcon, ArrowUpwardIcon } from '../../../ui/icons';
 import {
   ActionIcon,
@@ -44,6 +44,20 @@ import { selectApproverTypeOptions } from '../../../permissions/derive-options';
 import type { ApproverStageDraft, ApproverType } from '../../../types/approver';
 import type { ActionNodeData, ResultNodeData } from '../../../types/graph';
 import type { WorkflowScope } from '../../../types/workflow';
+
+/**
+ * The shared select can only summarise a multi-selection as "N Selected". The
+ * chosen approvers are listed by name below it instead, so the badge is hidden
+ * and the field keeps an "add" prompt.
+ */
+const hideCountBadgeSx = {
+  '& .MuiSelect-select .MuiChip-root': { display: 'none' },
+  '& .MuiSelect-select:has(.MuiChip-root)::before': {
+    content: '"Add more approvers"',
+    color: TEXT_SUBTLE,
+    fontSize: 14,
+  },
+};
 
 export interface ActionSidebarProps {
   isOpen: boolean;
@@ -90,6 +104,22 @@ export const ActionSidebar = ({
   const t = useTranslate();
   const permissions = useApprovalPermissions();
   const userSource = useApproverUserSource(scope);
+  // Names for the selected approver ids. The select only reports them as it
+  // loads options, so they are collected here and the chips fill in as they arrive.
+  const [approverNames, setApproverNames] = useState<Record<string, string>>({});
+  const rememberApprovers = useCallback((options: unknown) => {
+    const list = Array.isArray(options) ? options : options ? [options] : [];
+    setApproverNames((previous) => {
+      let next = previous;
+      for (const option of list as Array<{ value?: string | number; label?: unknown }>) {
+        if (option?.value === undefined || typeof option.label !== 'string') continue;
+        if (next[String(option.value)] === option.label) continue;
+        if (next === previous) next = { ...previous };
+        next[String(option.value)] = option.label;
+      }
+      return next;
+    });
+  }, []);
 
   const [title, setTitle] = useState('');
   const [stages, setStages] = useState<ApproverStageDraft[]>(() => [
@@ -360,15 +390,46 @@ export const ActionSidebar = ({
                 size="small"
                 {...userSource}
                 value={stage.approver_ids}
-                onChange={(_event: unknown, selected: Array<{ value: number }> | undefined) =>
+                onChange={(_event: unknown, selected: Array<{ value: number }> | undefined) => {
+                  rememberApprovers(selected);
                   updateStage(
                     index,
                     'approver_ids',
                     Array.isArray(selected) ? selected.map((entry) => entry.value) : [],
-                  )
-                }
+                  );
+                }}
+                getSelectedData={rememberApprovers}
                 placeholder={t(I18N.sidebar.usersPlaceholder)}
+                customStyle={hideCountBadgeSx}
               />
+              {stage.approver_ids.length > 0 ? (
+                <Box display="flex" flexWrap="wrap" gap={0.75} mt={1}>
+                  {stage.approver_ids.map((id) => (
+                    <Chip
+                      key={id}
+                      size="small"
+                      label={approverNames[String(id)] ?? '…'}
+                      onDelete={
+                        readOnly
+                          ? undefined
+                          : () =>
+                              updateStage(
+                                index,
+                                'approver_ids',
+                                stage.approver_ids.filter((current) => current !== id),
+                              )
+                      }
+                      sx={{
+                        maxWidth: '100%',
+                        bgcolor: 'theme.primary.100',
+                        color: 'theme.primary.800',
+                        fontWeight: 500,
+                        '& .MuiChip-deleteIcon': { color: 'theme.primary.800' },
+                      }}
+                    />
+                  ))}
+                </Box>
+              ) : null}
             </FormField>
           ) : null}
 

@@ -42,6 +42,8 @@ export const WORKFLOW_SCOPE_FIELDS = [
 export const APPROVAL_FIELDS = {
   ID: 'series_number',
   ENTITY_TYPE: 'entity_type',
+  /** Virtual column: the module record's series number, opening its details. */
+  RECORD_REF: 'entity_type_data',
   ENTITY_ID: 'entity_id',
   DESCRIPTION: 'comments',
   REQUESTED_BY: 'created_by_user',
@@ -60,6 +62,7 @@ export const APPROVAL_REQUIRED_SELECT_FIELDS = [
   'module',
   'created_by_user',
   'request_data',
+  'entity_type_data',
 ] as const;
 
 export const WORKFLOW_REQUIRED_SELECT_FIELDS = [

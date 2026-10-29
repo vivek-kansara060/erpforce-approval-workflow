@@ -328,6 +328,16 @@ export const I18N = {
     requestedBy: ['approval-dashboard.fields.requested_by', 'Requested by'],
     requestedOn: ['approval-dashboard.fields.requested_on', 'Requested on'],
     noActivity: ['approval-dashboard.empty.history', 'No approval activity yet'],
+    refresh: ['approval-dashboard.buttons.refresh', 'Refresh'],
+    recordDetails: ['approval-dashboard.sections.record_details', 'Record Details'],
+    recordDetailsEmpty: [
+      'approval-dashboard.empty.record_details',
+      'No additional details available for this record.',
+    ],
+    recordDetailsClose: ['common.close', 'Close'],
+    recordNone: ['approval-dashboard.labels.none', 'None'],
+    recordYes: ['common.yes', 'Yes'],
+    recordNo: ['common.no', 'No'],
   },
   /** The approval history popover. Its heading reuses `dashboard.history`. */
   history: {

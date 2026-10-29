@@ -52,6 +52,12 @@ export interface ApprovalRequest {
   /** Denormalised snapshot of the underlying record, when the API includes it. */
   request_data?: Record<string, unknown> | null;
 
+  /**
+   * The owning module's own data for the record under approval. Values come in
+   * any shape: strings, numbers, booleans, arrays and nested objects.
+   */
+  entity_type_data?: Record<string, unknown> | null;
+
   /** Which workflow and stage produced this request. */
   workflow_id?: string;
   stage_index?: number;

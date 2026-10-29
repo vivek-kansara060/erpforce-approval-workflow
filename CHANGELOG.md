@@ -13,6 +13,10 @@ Anything not listed there is internal and may change in a patch release.
 
 ### Added
 
+- Approval Dashboard: a "Record No." column showing the `series_number` from
+  `entity_type_data` as a link; clicking it opens a modal listing the rest of
+  `entity_type_data` (strings, numbers, booleans, arrays and nested objects).
+
 - **Approver picker merges users and employees.** With `employee` access both
   directories are read and combined on the user id, so each person appears once
   under their HR name, with the account name in brackets when the two differ;
