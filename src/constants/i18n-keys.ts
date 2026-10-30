@@ -329,6 +329,9 @@ export const I18N = {
     requestedOn: ['approval-dashboard.fields.requested_on', 'Requested on'],
     noActivity: ['approval-dashboard.empty.history', 'No approval activity yet'],
     refresh: ['approval-dashboard.buttons.refresh', 'Refresh'],
+    viewScope: ['approval-dashboard.filters.scope', 'Approval records shown'],
+    pendingOnly: ['approval-dashboard.filters.pending', 'Pending'],
+    allRecords: ['approval-dashboard.filters.all', 'All'],
     recordDetails: ['approval-dashboard.sections.record_details', 'Record Details'],
     recordDetailsEmpty: [
       'approval-dashboard.empty.record_details',

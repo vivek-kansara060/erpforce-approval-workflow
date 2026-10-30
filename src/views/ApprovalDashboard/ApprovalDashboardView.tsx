@@ -3,10 +3,10 @@
 
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Box, CircularProgress } from '@mui/material';
+import { Box, CircularProgress, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import { Button } from '../../ui';
 import { RefreshIcon } from '../../ui/icons';
-import { ACCENT, SURFACE } from '../../ui/tokens';
+import { ACCENT, FILL_MUTED, RADIUS, SURFACE, TEXT_STRONG, TEXT_SUBTLE } from '../../ui/tokens';
 import { AsyncBoundary } from '../../components/feedback';
 import { DataTable, ListToolbar, RowLink } from '../../components/list';
 import { ApprovalStatusChip } from '../../components/workflow';
@@ -19,6 +19,7 @@ import { I18N } from '../../constants/i18n-keys';
 import { APPROVAL_DASHBOARD_COLUMNS } from '../../constants/columns';
 import { APPROVAL_FIELDS } from '../../constants/fields';
 import { isPending } from '../../utils/status';
+import { formatTimestamp } from '../../utils/format';
 import { getSeriesNumber } from '../../utils/entity-data';
 import { useApprovalRequests } from '../../hooks/useApprovalRequests';
 import { useApprovalDecision } from '../../hooks/useApprovalDecision';
@@ -52,13 +53,15 @@ export interface ApprovalDashboardViewProps {
 export const ApprovalDashboardView = ({
   filters,
   scopeToCurrentUser = true,
-  pendingOnly = true,
+  pendingOnly: initialPendingOnly = true,
   title,
   renderToolbar,
 }: ApprovalDashboardViewProps) => {
   const t = useTranslate();
   const permissions = useApprovalPermissions();
   const { entityTitle, recordRoute, openRecord } = useApprovalRecordLinks();
+  // Starts from the prop; the toolbar toggle lets the user widen to every record.
+  const [pendingOnly, setPendingOnly] = useState(initialPendingOnly);
   const [detailsRequest, setDetailsRequest] = useState<ApprovalRequest | null>(null);
 
   const {
@@ -120,6 +123,8 @@ export const ApprovalDashboardView = ({
               <ApprovalStatusChip status={request.status} />
             ) : column.accessorKey === APPROVAL_FIELDS.ENTITY_TYPE ? (
               entityTitle(request)
+            ) : column.accessorKey === APPROVAL_FIELDS.DATE ? (
+              (formatTimestamp(request.created_at, { withTime: true }) ?? '-')
             ) : (
               (renderedCellValue ?? '-')
             );
@@ -171,6 +176,50 @@ export const ApprovalDashboardView = ({
     [t, openRecord, recordRoute, startApproval, openDecision, getPendingPreAction, permissions],
   );
 
+  const scopeToggle = (
+    <ToggleButtonGroup
+      exclusive
+      value={pendingOnly ? 'pending' : 'all'}
+      onChange={(_, value: 'pending' | 'all' | null) => {
+        if (value) setPendingOnly(value === 'pending');
+      }}
+      aria-label={t(I18N.dashboard.viewScope)}
+      sx={{
+        // Recessed track with a raised chip on the active segment, matching the
+        // search pill's fill rather than the default bordered button group.
+        '&&': {
+          bgcolor: FILL_MUTED,
+          borderRadius: RADIUS.control,
+          p: '2px',
+          gap: '2px',
+        },
+        '&& .MuiToggleButton-root': {
+          border: 'none',
+          borderRadius: RADIUS.control,
+          px: 1.25,
+          py: 0.25,
+          minHeight: 0,
+          fontSize: '0.8125rem',
+          fontWeight: 500,
+          lineHeight: 1.5,
+          textTransform: 'none',
+          color: TEXT_SUBTLE,
+          '&:hover': { bgcolor: 'transparent', color: TEXT_STRONG },
+          '&.Mui-selected': {
+            bgcolor: SURFACE,
+            color: TEXT_STRONG,
+            boxShadow: '0 1px 2px rgba(16, 24, 40, 0.12)',
+            '&:hover': { bgcolor: SURFACE },
+          },
+          '&.Mui-focusVisible': { outline: '2px solid', outlineColor: ACCENT },
+        },
+      }}
+    >
+      <ToggleButton value="pending">{t(I18N.dashboard.pendingOnly)}</ToggleButton>
+      <ToggleButton value="all">{t(I18N.dashboard.allRecords)}</ToggleButton>
+    </ToggleButtonGroup>
+  );
+
   return (
     <PermissionGate capability="approval.view">
       <Box sx={{ bgcolor: SURFACE, minHeight: '100%' }}>
@@ -190,20 +239,23 @@ export const ApprovalDashboardView = ({
             totalCount={totalCount}
             showAdd={false}
             actions={
-              <Button
-                variant="outlined"
-                startIcon={
-                  isRefetching ? (
-                    <CircularProgress size={16} color="inherit" />
-                  ) : (
-                    <RefreshIcon fontSize="small" />
-                  )
-                }
-                onClick={() => void refetch()}
-                disabled={isRefetching}
-              >
-                {t(I18N.dashboard.refresh)}
-              </Button>
+              <>
+                {scopeToggle}
+                <Button
+                  variant="outlined"
+                  startIcon={
+                    isRefetching ? (
+                      <CircularProgress size={16} color="inherit" />
+                    ) : (
+                      <RefreshIcon fontSize="small" />
+                    )
+                  }
+                  onClick={() => void refetch()}
+                  disabled={isRefetching}
+                >
+                  {t(I18N.dashboard.refresh)}
+                </Button>
+              </>
             }
           />
         )}
